@@ -25,7 +25,7 @@ The bot operates in these factors as follows (subject to change and currently un
 [ ] Exclude Media/Links: Summarize text chatter only, ignoring shared files, memes, and links.
 [ ] Systemic Selection: Take messages with attachments AND with the *#summarize*
 
-## Usage
+## ⚙️ Usage
 The bot mainly runs on two functions:
 - ### **/start** command:
 Provides the introduction and guide to using the summarizer.
@@ -37,7 +37,7 @@ The main function of this bot, which are as follows (this is also in the **/star
 
 2. It will ask for a specific prompt asking for a topic. If there is no known topic or unspecified, type "NA". 
 
-## Open-Source Collaboration
+## 🔗 Open-Source Collaboration
 Currently, only invited people are allowed to collaborate on the project (ask owner for more details).
 For additional information, roles are open for inquiry (reserved for SMU students only):
 
@@ -50,7 +50,7 @@ For additional information, roles are open for inquiry (reserved for SMU student
 7. **QA/testing** — running the bot in a real group chat, catching edge cases, filing issues
 8. **Peer Reviewer** — no dedicated coding, just reviews PRs before merge (good role for someone less into Python but organized)
 
-## Current Work Plan
+## 📈 Current Work Plan
 The steps to the work plan of this project are as follows:
 
 1. Telegram API: Configure the bot and use the API to write its code template and set event calls to send messages.
@@ -59,6 +59,6 @@ The steps to the work plan of this project are as follows:
 4. Overall testing, QA, and revision cycle in debugging (LONGEST PHASE)
 5. Web/Server Hosting **(FINAL DESTINATION)**
 
-## Conclusion
+## :dependabot: Conclusion
 Thank you for checking this repository out, have a nice day!
 

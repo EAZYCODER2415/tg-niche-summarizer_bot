@@ -14,7 +14,7 @@ import os
 from collections import defaultdict
 from datetime import datetime
 
-# Setup Telegram API
+# Setup Telegram API libraries
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -50,12 +50,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     buffered = message_buffer.get(chat_id, [])
-
+    # No messages buffered in database.
     if not buffered:
         await update.message.reply_text("No messages logged yet to summarize.")
         return
 
-    # Placeholder — this is exactly where Step 2's LLM call will slot in.
+    # Placeholder — this is exactly where the LLM call will slot in.
     # e.g. summary = await call_llm_summarizer(buffered)
     await update.message.reply_text(
         f"[Placeholder] I've logged {len(buffered)} messages since last "
@@ -86,6 +86,7 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 # --- App setup -----------------------------------------------------------
 def main() -> None:
+    # Token validation check before each first run
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         raise RuntimeError(
@@ -93,8 +94,10 @@ def main() -> None:
             "Set it before running: export TELEGRAM_BOT_TOKEN='your-token'"
         )
 
+    # Application setup of the whole bot
     application = Application.builder().token(token).build()
 
+    # Command TREE (command handlers)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("summarize", summarize))
 
@@ -103,6 +106,7 @@ def main() -> None:
         MessageHandler(filters.TEXT & ~filters.COMMAND, log_message)
     )
 
+    # Polling is a mechanism in which the Telegram bot is maintained in activity from detecting updates at all times.
     logger.info("Bot starting (polling mode)...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 

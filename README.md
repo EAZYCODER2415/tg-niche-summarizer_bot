@@ -1,4 +1,4 @@
-# 🦁 SMU Niche Summarizer (WORK IN PROGRESS)
+# 🦁 SMU Niche Summarizer (PROTOTYPE IN PROGRESS)
 A Telegram bot run on Python's python-telegram-bot API that summarizes conversations based on timeframes or activity detection using ____ LLM API.
 
 ## 📰 Introduction
@@ -14,7 +14,7 @@ The bot operates in these factors as follows (subject to change and currently un
 [ ] Daily Digest: An automated summary sent every evening.
 [ ] Activity-Based: Whenever a massive wave of unread messages happens (e.g., 50+ new messages).
 
-2. 📋 Formatting Style 
+2. 📋 Formatting Style
 [ ] TL;DR Bullet Points: 3–5 quick bullet points highlighting major decisions, deadlines, or topics.
 [ ] The "Narrative" Style: A short, paragraph-style story of what went down while one was gone.
 [ ] Action-Items Only: Strict focus on who needs to do what, plus any upcoming dates.
@@ -23,7 +23,10 @@ The bot operates in these factors as follows (subject to change and currently un
 [ ] Everything: Analyze all messages in the main chat to ensure nothing gets missed.
 [ ] Opt-In Only: Only summarize messages that include a specific tag (like *⁠#important*⁠ or ⁠*#summary*⁠).
 [ ] Exclude Media/Links: Summarize text chatter only, ignoring shared files, memes, and links.
-[ ] Systemic Selection: Take messages with attachments AND with the *#summarize*
+[ ] Systemic Attachment Processing: While summarizing, take messages with attachments AND with the *#summarize* into account to answer privacy concerns.
+ - PNG/JPG/JPEG Images - Compressed to efficient size for processing by LLM API.
+ - PDF or Similar Documents - Content omitted, except filename.
+ - MP4, MP3, and Similar Files - TO BE DETERMINED.
 
 ## ⚙️ Usage
 The bot mainly runs on two functions:

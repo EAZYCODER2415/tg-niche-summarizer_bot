@@ -10,20 +10,20 @@ This started out as a personal project for a small Telegram group chat for Singa
 The bot operates in these factors as follows (subject to change and currently under discussion):
 
 1. ⌨️ Summarize Event Trigger
-[ ] On-Demand Command: When someone types the command to trigger the summarization.
-[ ] Daily Digest: An automated summary sent every evening.
-[ ] Activity-Based: Whenever a massive wave of unread messages happens (e.g., 50+ new messages).
+> On-Demand Command: When someone types the command to trigger the summarization.
+> Daily Digest: An automated summary sent every evening.
+> Activity-Based: Whenever a massive wave of unread messages happens (e.g., 50+ new messages).
 
 2. 📋 Formatting Style
-[ ] TL;DR Bullet Points: 3–5 quick bullet points highlighting major decisions, deadlines, or topics.
-[ ] The "Narrative" Style: A short, paragraph-style story of what went down while one was gone.
-[ ] Action-Items Only: Strict focus on who needs to do what, plus any upcoming dates.
+> TL;DR Bullet Points: 3–5 quick bullet points highlighting major decisions, deadlines, or topics.
+> The "Narrative" Style: A short, paragraph-style story of what went down while one was gone.
+> Action-Items Only: Strict focus on who needs to do what, plus any upcoming dates.
 
 3. 🔒 Privacy & Scope
-[ ] Everything: Analyze all messages in the main chat to ensure nothing gets missed.
-[ ] Opt-In Only: Only summarize messages that include a specific tag (like *⁠#important*⁠ or ⁠*#summary*⁠).
-[ ] Exclude Media/Links: Summarize text chatter only, ignoring shared files, memes, and links.
-[ ] Systemic Attachment Processing: While summarizing, take messages with attachments AND with the *#summarize* into account to answer privacy concerns.
+> Everything: Analyze all messages in the main chat to ensure nothing gets missed.
+> Opt-In Only: Only summarize messages that include a specific tag (like *⁠#important*⁠ or ⁠*#summary*⁠).
+> Exclude Media/Links: Summarize text chatter only, ignoring shared files, memes, and links.
+> Systemic Attachment Processing: While summarizing, take messages with attachments AND with the *#summarize* into account to answer privacy concerns.
  - PNG/JPG/JPEG Images - Compressed to efficient size for processing by LLM API.
  - PDF or Similar Documents - Content omitted, except filename.
  - MP4, MP3, and Similar Files - TO BE DETERMINED.

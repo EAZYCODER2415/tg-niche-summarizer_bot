@@ -1,11 +1,11 @@
 """
-Telegram Summary Bot — Skeleton
+Telegram Summary Bot — Skeleton Ver.
 ----------------------------------------
 Connection to Telegram, listens to event triggers from commands, computes messages and evaluates summary with LLM AI.
 
-Required Setup for each server:
-    pip install python-telegram-bot --upgrade
-    export TELEGRAM_BOT_TOKEN="your-token-from-botfather"
+Required Setup for each run:
+    pip install python-telegram-bot --upgrade {INSTALL telegram py library}
+    export TELEGRAM_BOT_TOKEN="[INSERT_TOKEN_HERE]"
     python bot.py
 """
 
@@ -14,6 +14,7 @@ import os
 from collections import defaultdict
 from datetime import datetime
 
+# Setup Telegram API
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -23,6 +24,7 @@ from telegram.ext import (
     filters,
 )
 
+# Log of bot status while running background checks (INFO, WARNING, ERROR) 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,

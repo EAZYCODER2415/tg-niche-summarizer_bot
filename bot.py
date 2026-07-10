@@ -4,7 +4,7 @@ Telegram Summary Bot — Skeleton Ver.
 Connection to Telegram, listens to event triggers from commands, computes messages and evaluates summary with LLM AI.
 
 Required Setup for each run:
-    pip install python-telegram-bot --upgrade {INSTALL telegram py library}
+    pip install python-telegram-bot --upgrade [INSTALL telegram py library]
     export TELEGRAM_BOT_TOKEN="[INSERT_TOKEN_HERE]"
     python bot.py
 """
@@ -110,6 +110,6 @@ def main() -> None:
     logger.info("Bot starting (polling mode)...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
-
+# Run the whole code
 if __name__ == "__main__":
     main()

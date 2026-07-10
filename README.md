@@ -43,7 +43,7 @@ Provides the introduction and guide to using the summarizer.
 - ### **/summarize** command:
 The main function of this bot, which are as follows (this is also in the **/start** command):
 
-1. Once the command is typed, the bot will ask for a time range, in which it could be from weeks to minutes.
+1. Once the command is typed, the bot will ask for a time range, in which it could be from days to minutes.
 
 2. It will ask for a specific prompt asking for a topic. If there is no known topic or unspecified, type "NA". 
 

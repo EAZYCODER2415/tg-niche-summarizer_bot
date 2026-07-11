@@ -68,8 +68,7 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "Invalid parameters. Usage: /summarize [numerical hours] '[topic (optional)]'"
             )
             return
-    
-    messages = db.get_unsummarized_messages(chat_id)
+
     # Placeholder — this is exactly where the LLM call will slot in.
     # e.g. summary = await call_llm_summarizer(buffered)
     await update.message.reply_text(

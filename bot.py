@@ -65,7 +65,7 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 topic = str(context.args[0]) # Parameter can arrive in int format
         except ValueError:
             await update.message.reply_text(
-                "Invalid parameters. Usage: /summarize [hours] [topic (optional)]"
+                "Invalid parameters. Usage: /summarize [numerical hours] '[topic (optional)]'"
             )
             return
     

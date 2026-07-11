@@ -38,7 +38,7 @@ Thanks for wanting to contribute and congratulations for getting Collaborator ac
 ```
 bot.py              # Telegram handlers (commands, message logging)
 db.py               # SQLite storage layer (log/retrieve messages)
-llm.py              # LLM API handler (prompts, e.t.c)
+summarizer.py       # LLM API handler (prompts, e.t.c)
 requirements.txt    # Python dependencies
 README.md           # Project overview
 CONTRIBUTING.md      # You are here

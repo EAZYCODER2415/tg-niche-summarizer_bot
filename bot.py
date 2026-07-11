@@ -55,11 +55,26 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("No messages logged yet to summarize.")
         return
 
+    # Included parameters
+    hours = 24 # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
+    topic = '' # No topic as default, topic parameter in string format.
+    if context.args:
+        try:
+            hours = int(context.args[0]) # Parameter can arrive in int format
+            if len(context.args) == 2:
+                topic = str(context.args[0]) # Parameter can arrive in int format
+        except ValueError:
+            await update.message.reply_text(
+                "Invalid parameters. Usage: /summarize [hours] [topic (optional)]"
+            )
+            return
+    
+    messages = db.get_unsummarized_messages(chat_id)
     # Placeholder — this is exactly where the LLM call will slot in.
     # e.g. summary = await call_llm_summarizer(buffered)
     await update.message.reply_text(
-        f"[Placeholder] I've logged {len(buffered)} messages since last "
-        f"summary. LLM summarization isn't connected yet."
+        f"[Placeholder] I've summarized {len(buffered)} messages since last {hours}"
+        f"hours. sike LLM summarization isn't connected yet."
     )
 
     # Once summarization is live, you'd typically clear the buffer here:

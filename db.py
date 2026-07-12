@@ -17,7 +17,7 @@ Setup:
     Then run init_db() once (bot.py does this automatically on startup)
     to create the messages table if it doesn't exist yet.
 
---> SUBJECT FOR PERSONAL REVIEW LATER <--
+--> SUBJECT FOR PERSONAL REVIEW LATER <-- im here
 """
 
 import os

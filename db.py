@@ -1,7 +1,7 @@
 """
 db.py — MySQL storage layer for the Telegram Summary Bot.
 
-Replaces the in-memory `message_buffer` dict with persistent MySQL storage.
+Replaces the in-memory `message_buffer` dict with the highly efficient MySQL storage.
 Keeping this in its own module means bot.py doesn't need to know *how*
 messages are stored — just that it can call log_message() / get_messages().
 

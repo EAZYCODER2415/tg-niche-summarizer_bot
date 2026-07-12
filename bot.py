@@ -14,6 +14,9 @@ import os
 from collections import defaultdict
 from datetime import datetime
 
+import db
+from db import init_db
+
 # Setup Telegram API libraries
 from telegram import Update
 from telegram.ext import (
@@ -100,6 +103,9 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 # --- App setup -----------------------------------------------------------
 def main() -> None:
+    # Initialize SQL database library
+    init_db()
+
     # Token validation check before each first run
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:

@@ -48,7 +48,7 @@ package-lock.json   # Handles dependencies' versioning
 
 - Telegram-related changes (commands, event handling) → `bot.py`
 - Storage/query changes → `db.py`
-- LLM/prompt work → will live in a new `summarizer.py` (see open issues)
+- LLM/prompt work → will live in a new `summarizer.py` (see [open issues](https://github.com/EAZYCODER2415/tg-niche-summarizer_bot/issues))
 
 ## How to Claim Work
 

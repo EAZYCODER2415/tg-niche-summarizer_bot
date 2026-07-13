@@ -68,7 +68,7 @@ We use `commitizen` combined with `cz-emoji` to standardise our commit messages 
    ```bash
    npm install --save-dev commitizen cz-emoji
    ```
-2. Globlly install both `cz` combined with `cz-emoji` as devDependencies:
+2. Globlly install `commitizen`to link global CLI tool (the command especially):
    ```bash
    npm install -g commitizen
    ```

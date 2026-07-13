@@ -6,7 +6,7 @@ Thanks for wanting to contribute and congratulations for getting Collaborator ac
 
 1. **Clone** your fork locally:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/PROJECT-NAME.git
+   git clone https://github.com/EAZYCODER2415/tg-niche-summarizer_bot.git
    cd PROJECT-NAME
    ```
    **OR** just run it on a **Codespace**

@@ -41,7 +41,9 @@ db.py               # SQLite storage layer (log/retrieve messages)
 summarizer.py       # LLM API handler (prompts, e.t.c)
 requirements.txt    # Python dependencies
 README.md           # Project overview
-CONTRIBUTING.md      # You are here
+CONTRIBUTING.md     # You are here
+package.json        # Handles Commitizen configuration and dependencies
+package-lock.json   # Handles dependencies' versioning
 ```
 
 - Telegram-related changes (commands, event handling) → `bot.py`

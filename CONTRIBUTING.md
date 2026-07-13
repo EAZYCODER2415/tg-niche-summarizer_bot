@@ -7,7 +7,7 @@ Thanks for wanting to contribute and congratulations for getting Collaborator ac
 1. **Clone** your fork locally:
    ```bash
    git clone https://github.com/EAZYCODER2415/tg-niche-summarizer_bot.git
-   cd PROJECT-NAME
+   cd tg-niche-summarizer_bot
    ```
    **OR** just run it on a **Codespace**
 2. **Set up a virtual environment** (keeps dependencies isolated):
@@ -59,6 +59,21 @@ package-lock.json   # Handles dependencies' versioning
 ## Making Changes
 
 It's best to download [Commitizen](https://commitizen-tools.github.io/commitizen/), as that's how we standardise our commits (and will guide you through what to write). Fill in the type, scope, title, and longer description of the commit.
+
+### How to Install & Run Commitizen
+
+We use `commitizen` combined with `cz-emoji` to standardise our commit messages with clear visual formatting with emojis. 
+
+1. Locally install both `commitizen` combined with `cz-emoji` as devDependencies:
+   ```bash
+   npm install --save-dev commitizen cz-emoji
+   ```
+2. Globlly install both `cz` combined with `cz-emoji` as devDependencies:
+   ```bash
+   npm install -g commitizen
+   ```
+
+### Back to Making Changes
 
 1. Create a new branch off `main`, named for what you're doing:
    ```bash

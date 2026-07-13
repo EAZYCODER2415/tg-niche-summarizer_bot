@@ -62,15 +62,15 @@ It's best to download [Commitizen](https://commitizen-tools.github.io/commitizen
 
 1. Create a new branch off `main`, named for what you're doing:
    ```bash
-   git checkout -b feature/short-description
+   git checkout -b type/short-title
    ```
-   (e.g. `feature/sqlite-time-filter`, `fix/summarize-empty-buffer`)
+   (e.g. `feat/sqlite-database-optimisation`, `feat/add-commitizen`, `fix/time-limit-bug`)
 2. Make your changes, testing locally before committing
 3. Write clear commit messages, which `git-cz` (run this command) will guide you through:
    Explain *what* changed and briefly *why* — not just "fixed stuff".
 4. Push your branch:
    ```bash
-   git push origin feature/short-description
+   git push origin feat/short-description
    ```
 
 ## Submitting a Pull Request

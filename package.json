@@ -10,7 +10,7 @@
       "path": "./node_modules/cz-emoji"
     },
     "cz-emoji": {
-      "format": "{emoji}({scope}): {subject}",
+      "format": "{emoji}{scope}: {subject}",
       "skipQuestions": ["breaking", "issues"],
       "types": [
         {

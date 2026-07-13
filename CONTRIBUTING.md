@@ -58,17 +58,16 @@ package-lock.json   # Handles dependencies' versioning
 
 ## Making Changes
 
+It's best to download [Commitizen](https://commitizen-tools.github.io/commitizen/), as that's how we standardise our commits (and will guide you through what to write). Fill in the type, scope, title, and longer description of the commit.
+
 1. Create a new branch off `main`, named for what you're doing:
    ```bash
    git checkout -b feature/short-description
    ```
    (e.g. `feature/sqlite-time-filter`, `fix/summarize-empty-buffer`)
 2. Make your changes, testing locally before committing
-3. Write clear commit messages:
-   ```bash
-   git commit -m "Add time-window filtering to /summarize command"
-   ```
-   Explain *what* changed and briefly *why* — not just "fixed stuff"
+3. Write clear commit messages, which `git-cz` (run this command) will guide you through:
+   Explain *what* changed and briefly *why* — not just "fixed stuff".
 4. Push your branch:
    ```bash
    git push origin feature/short-description

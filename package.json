@@ -1,0 +1,49 @@
+{
+  "scripts": {
+    "cm": "cz"
+  },
+  "devDependencies": {
+    "cz-emoji": "^1.3.2-canary.2"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-emoji"
+    },
+    "cz-emoji": {
+      "format": "{emoji}{scope}: {subject}",
+      "skipQuestions": ["breaking", "issues"],
+      "types": [
+        {
+          "emoji": "✨",
+          "code": ":stars:",
+          "description": "A new feature",
+          "name": "feat"
+        },
+        {
+          "emoji": "🐛",
+          "code": ":bug:",
+          "description": "Fixing a bug",
+          "name": "fix"
+        },
+        {
+          "emoji": "♻️",
+          "code": ":recycle:",
+          "description": "Refactoring code",
+          "name": "refactor"
+        },
+        {
+          "emoji": "📖",
+          "code": ":book:",
+          "description": "Updating documentation",
+          "name": "docs"
+        },
+        {
+          "emoji": "🔧",
+          "code": ":wrench:",
+          "description": "Changing configs",
+          "name": "config"
+        }
+      ]
+    }
+  }
+}

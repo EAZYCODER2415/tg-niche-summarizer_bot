@@ -21,7 +21,7 @@ Thanks for wanting to contribute and congratulations for getting Collaborator ac
    ```
 4. **Set up environment variables**
     ```
-    pip install python-telegram-bot --upgrade [INSTALL telegram py library]
+    pip install python-telegram-bot --upgrade [UPDATE telegram py library]
     export TELEGRAM_BOT_TOKEN="[INSERT_TOKEN_HERE]"
     python bot.py 
     ```

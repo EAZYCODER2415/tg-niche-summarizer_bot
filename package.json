@@ -1,9 +1,12 @@
 {
+  "name": "tg-niche-summarizer_bot",
+  "version": "1.0.0",
   "scripts": {
     "cm": "cz"
   },
   "devDependencies": {
-    "cz-emoji": "^1.3.2-canary.2"
+    "commitizen": "^4.3.2",
+    "cz-emoji": "^1.0.0"
   },
   "config": {
     "commitizen": {
@@ -11,7 +14,10 @@
     },
     "cz-emoji": {
       "format": "{emoji}{scope}: {subject}",
-      "skipQuestions": ["breaking", "issues"],
+      "skipQuestions": [
+        "breaking",
+        "issues"
+      ],
       "types": [
         {
           "emoji": "✨",
@@ -45,5 +51,8 @@
         }
       ]
     }
+  },
+  "dependencies": {
+    "cz-conventional-changelog": "^3.3.0"
   }
 }

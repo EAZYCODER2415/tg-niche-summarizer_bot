@@ -6,8 +6,8 @@ Thanks for wanting to contribute and congratulations for getting Collaborator ac
 
 1. **Clone** your fork locally:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/PROJECT-NAME.git
-   cd PROJECT-NAME
+   git clone https://github.com/EAZYCODER2415/tg-niche-summarizer_bot.git
+   cd tg-niche-summarizer_bot
    ```
    **OR** just run it on a **Codespace**
 2. **Set up a virtual environment** (keeps dependencies isolated):
@@ -41,12 +41,14 @@ db.py               # SQLite storage layer (log/retrieve messages)
 summarizer.py       # LLM API handler (prompts, e.t.c)
 requirements.txt    # Python dependencies
 README.md           # Project overview
-CONTRIBUTING.md      # You are here
+CONTRIBUTING.md     # You are here
+package.json        # Handles Commitizen configuration and dependencies
+package-lock.json   # Handles dependencies' versioning
 ```
 
 - Telegram-related changes (commands, event handling) → `bot.py`
 - Storage/query changes → `db.py`
-- LLM/prompt work → will live in a new `summarizer.py` (see open issues)
+- LLM/prompt work → will live in a new `summarizer.py` (see [open issues](https://github.com/EAZYCODER2415/tg-niche-summarizer_bot/issues))
 
 ## How to Claim Work
 
@@ -56,20 +58,34 @@ CONTRIBUTING.md      # You are here
 
 ## Making Changes
 
+It's best to download [Commitizen](https://commitizen-tools.github.io/commitizen/), as that's how we standardise our commits (and will guide you through what to write). Fill in the type, scope, title, and longer description of the commit.
+
+### How to Install & Run Commitizen
+
+We use `commitizen` combined with `cz-emoji` to standardise our commit messages with clear visual formatting with emojis. 
+
+1. Locally install both `commitizen` combined with `cz-emoji` as devDependencies:
+   ```bash
+   npm install --save-dev commitizen cz-emoji
+   ```
+2. Globlly install `commitizen`to link global CLI tool (the command especially):
+   ```bash
+   npm install -g commitizen
+   ```
+
+### Back to Making Changes
+
 1. Create a new branch off `main`, named for what you're doing:
    ```bash
-   git checkout -b feature/short-description
+   git checkout -b type/short-title
    ```
-   (e.g. `feature/sqlite-time-filter`, `fix/summarize-empty-buffer`)
+   (e.g. `feat/sqlite-database-optimisation`, `feat/add-commitizen`, `fix/time-limit-bug`)
 2. Make your changes, testing locally before committing
-3. Write clear commit messages:
-   ```bash
-   git commit -m "Add time-window filtering to /summarize command"
-   ```
-   Explain *what* changed and briefly *why* — not just "fixed stuff"
+3. Write clear commit messages, which `git-cz` (run this command) will guide you through:
+   Explain *what* changed and briefly *why* — not just "fixed stuff".
 4. Push your branch:
    ```bash
-   git push origin feature/short-description
+   git push origin feat/short-description
    ```
 
 ## Submitting a Pull Request

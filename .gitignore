@@ -218,6 +218,6 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Ignore node_modules
-node_modules
+node_modules/
 package-lock.json
 package.json

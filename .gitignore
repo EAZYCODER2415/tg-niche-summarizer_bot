@@ -219,3 +219,6 @@ __marimo__/
 
 # Ignore node_modules
 node_modules/
+format/add-pr-template
+package-lock.json
+package.json

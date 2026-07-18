@@ -1,0 +1,58 @@
+{
+  "name": "tg-niche-summarizer_bot",
+  "version": "1.0.0",
+  "scripts": {
+    "cm": "cz"
+  },
+  "devDependencies": {
+    "commitizen": "^4.3.2",
+    "cz-emoji": "^1.0.0"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-emoji"
+    },
+    "cz-emoji": {
+      "format": "{emoji}{scope}: {subject}",
+      "skipQuestions": [
+        "breaking",
+        "issues"
+      ],
+      "types": [
+        {
+          "emoji": "✨",
+          "code": ":stars:",
+          "description": "A new feature",
+          "name": "feat"
+        },
+        {
+          "emoji": "🐛",
+          "code": ":bug:",
+          "description": "Fixing a bug",
+          "name": "fix"
+        },
+        {
+          "emoji": "♻️",
+          "code": ":recycle:",
+          "description": "Refactoring code",
+          "name": "refactor"
+        },
+        {
+          "emoji": "📖",
+          "code": ":book:",
+          "description": "Updating documentation",
+          "name": "docs"
+        },
+        {
+          "emoji": "🔧",
+          "code": ":wrench:",
+          "description": "Changing configs",
+          "name": "config"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "cz-conventional-changelog": "^3.3.0"
+  }
+}

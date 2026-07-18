@@ -87,7 +87,7 @@ Pick whichever role fits your interest — no application process, fully open fo
 5. Make your change, **git commit** your branch, then open a **Pull Request** — describe what you did and why
 6. A maintainer reviews it, suggests changes if needed, and merges it in
 
-See `CONTRIBUTING.md` for full setup instructions and coding conventions.
+See [CONTRIBUTING.md](https://github.com/EAZYCODER2415/tg-niche-summarizer_bot/blob/main/CONTRIBUTING.md) for full setup instructions and coding conventions.
 
 ### Not Sure Where to Start?
 

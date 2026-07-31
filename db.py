@@ -8,8 +8,6 @@ in a SQLite database from Telegram handlers.
 """
 
 import sqlite3
-import os
-from datetime import datetime
 
 def init_db():
     """Initialize the SQLite database and create the messages table if it doesn't exist."""

@@ -11,8 +11,6 @@ Required Setup for each run:
 
 import logging
 import os
-from collections import defaultdict
-from datetime import datetime
 
 import db
 from db import init_db
@@ -108,7 +106,7 @@ def begin_processing(chat_id, user, attachment_type):
 
 async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Buffers every text message in a group chat for later summarization."""
-    if not update.message or not update.message.text:
+    if not update.message:
         return  # Ignore non-text messages
 
     chat_id = update.effective_chat.id

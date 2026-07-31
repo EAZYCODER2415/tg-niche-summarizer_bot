@@ -127,8 +127,9 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         begin_processing(chat_id, user, attachment_type)
 
     try:
-        if chat_type in ["group", "supergroup"]:
-            db.log_message(
+        if has_attachment and "#summarize" in text.lower():
+            if chat_type in ["group", "supergroup"]:
+                db.log_message(
                     chat_id=chat_id,
                     chat_type=chat_type,
                     chat_title=chat_title,
@@ -138,8 +139,8 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     attachment_type=attachment_type,
                     timestamp=timestamp
                 )
-        elif chat_type == "private":
-            db.log_message(
+            elif chat_type == "private":
+                db.log_message(
                     chat_id=chat_id,
                     chat_type=chat_type,
                     chat_title="Private Chat",
@@ -147,6 +148,29 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     text=text,
                     has_attachment=has_attachment,
                     attachment_type=attachment_type,
+                    timestamp=timestamp
+                )
+        else:
+            if chat_type in ["group", "supergroup"]:
+                db.log_message(
+                    chat_id=chat_id,
+                    chat_type=chat_type,
+                    chat_title=chat_title,
+                    user=user,
+                    text=text,
+                    has_attachment=0,
+                    attachment_type=NULL,
+                    timestamp=timestamp
+                )
+            elif chat_type == "private":
+                db.log_message(
+                    chat_id=chat_id,
+                    chat_type=chat_type,
+                    chat_title="Private Chat",
+                    user=user,
+                    text=text,
+                    has_attachment=0,
+                    attachment_type=NULL,
                     timestamp=timestamp
                 )
             logger.info(f"Logged message from {user} in chat {chat_id}")
@@ -180,7 +204,10 @@ def main() -> None:
 
     # Catches all non-command text messages (group or private) and buffers them.
     application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, log_message)
+        MessageHandler(
+            (filters.TEXT | filters.ATTACHMENT) & ~filters.COMMAND,
+            log_message
+        )
     )
 
     # Register global error handler

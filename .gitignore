@@ -219,3 +219,7 @@ __marimo__/
 
 # Ignore node_modules
 node_modules/
+ 
+# SQLite database file
+*.db
+*.sqlite3

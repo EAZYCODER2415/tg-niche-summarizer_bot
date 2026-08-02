@@ -1,107 +1,101 @@
-# 🦁 SMU Niche Summarizer (PROTOTYPE IN PROGRESS)
+# 🦁 SMU Niche Summarizer (prototype in progress)
+⭐ Star this repo if you find it useful ⭐
+
 **Repository Owner:** Pongsavaruth Vorajayudhbong
 
-## 🌟 Introduction
+## 💡 Introduction
 
-**How many times have you opened a Telegram group chat to 200 unread pings and just given up?** And what's more, **pressured to catch up on whatever the group is discussing or plotting on?** This project aims to alleviate feelings of **FOMO, burnout, isolation and information overload** for starting university students. This is a Telegram bot heavily run on Python that summarizes conversations within seconds using advanced LLM processing.
+How many times have you opened a Telegram group chat to 200 unread pings and just given up? And what's more, felt pressured to catch up on whatever the group is discussing or plotting?
 
-This started out as a personal project for a small Telegram group chat for Singapore Management University (SMU) students, making this the first experimentation with the Telegram's python-telegram-bot API and advanced LLM APIs on Python.
+This project aims to ease **FOMO, burnout, isolation, and information overload** for incoming university students. It's a Python-based Telegram bot that summarizes conversations in seconds using LLM processing.
 
-## 📰 Key Resources Used
+It started as a personal project for a small SMU (Singapore Management University) group chat, and doubles as a first experiment with the `python-telegram-bot` API and LLM APIs in Python.
 
-### 📁 Programming Syntax 
-- Python 🐍
-- SQL 📊
+## 🛠️ Tech Stack
 
-### 📁 APIs
-- python-telegram-bot 🤖
-- Claude or Qwen 🤖
+**Language:**
+- ![Python](https://img.shields.io/badge/python-3670A0?style=flat&logo=python&logoColor=ffdd54)
+- ![MySQL](https://img.shields.io/badge/MySQL-4479A1?style=flat&logo=mysql&logoColor=white)
 
-### Three-Stage Pipeline: 📩 Telegram -> 📠 LLM -> 📩 Telegram 
+**APIs:**
+- python-telegram-bot
+- Claude or Qwen
 
-## ⭐ Key Features
-The bot operates in these factors as follows (subject to change and currently under discussion):
+**Pipeline:** Telegram → LLM → Telegram
 
-| Feature | Sub-feature A | Sub-feature B |
-|---|---|---|
-| ⌨️ Summarize Event Trigger | **Command Trigger:** When someone types the command to trigger the summarization. | **Activity-Based:** Whenever a massive wave of unread messages happens (e.g., 50+ new messages). |
-| 📋 Formatting Style | **TL;DR Bullet Points:** 3–5 quick bullet points highlighting major decisions, deadlines, or topics. | N/A |
-| 🔒 Privacy & Scope | **All Text Messages Excluding Media/Links:** Summarize text chatter only, ignoring shared files, memes, and links as default. | **Systemic Attachment Processing:** While summarizing, take messages with attachments AND with the *#summarize* into account to answer privacy concerns. |
+## ✨ Key Features
+*Subject to change — currently under discussion.*
 
-### Additional Remarks 🔵
-- PNG/JPG/JPEG Images - Compressed to efficient size for processing by LLM API.
-- PDF or Similar Documents - Content omitted, except filename.
-- MP4, MP3, and Similar Files - TO BE DETERMINED.
+| Feature | Options |
+|---|---|
+| 🔔 **Trigger** | Command-based (user types the `/summarize` command), or Activity-based (auto-triggers after 50+ unread messages) |
+| 📋 **Format** | TL;DR — 3 to 5 bullet points covering major decisions, deadlines, or topics |
+| 🔒 **Privacy & scope** | By default, summarizes text only — media, files, and links are excluded. Messages with attachments are included only if tagged `#summarize` |
 
-*(This information is according to poll votes and extra suggestions from the gc)*
+| Attachment type | Handling |
+|---|---|
+| 🖼️ **Images** (png, jpg, jpeg) | Compressed before being sent to the LLM API |
+| 📄 **Documents** (pdf, docx, etc.) | Filename only, content omitted |
+| 🎬 **Audio/video** (mp3, mp4, etc.) | Not yet decided |
+
+*(Based on poll results and suggestions among collaborators.)*
 
 ## ⚙️ Usage
-The bot mainly runs on two functions:
-- ### **/start** command:
-Provides the introduction and guide to using the summarizer.
+The bot mainly runs on **TWO** commands:
+1. `/start` → shows an intro and usage guide.
+2. `/summarize` → the core command. Takes **TWO** parameters:
 
-- ### **/summarize** command:
-The main function of this bot, which are as follows (this is also in the **/start** command):
-**Parameters**:
-1. Time (measured in hours, maximum 72 hours which is 3 days)
-2. Topic (string format parameter, must be enclosed in quotation marks)
+    - `time` &ensp;→ hours to look back (max 72)
+    - `topic` → a string in quotation marks
 
-- ### **Automatic Activity Logging**:
-The Telegram bot will run the /summarize command on itself when it reaches a set limit of messages buffered since last summary (e.g. 50 new messages).
+**Automatic logging:** the bot also runs `/summarize` on itself once a set number of new messages (e.g. 50) have piled up since the last summary.
 
 ## 🤝 Get Involved
+This is an open-collaboration project — built by students, for students, as a space to actually learn Python, bots, and LLM integration by doing.
 
-This is an open-collaboration project — built by students, for students. **NO** prior Git or bot-development experience needed to contribute, as we value a low-stakes development enviroment, aimed to synchronize learning with creating!!
+To join, message [@StealrunNshoot](https://t.me/StealrunNshoot) on Telegram with:
+1. Your GitHub username
+2. Your preferred role(s)
+3. A sentence or two on what you want to get out of contributing
+
+No formal application, no gatekeeping on experience — but you should be able to explain your own code. PRs that are clearly copy-pasted without understanding won't be taken seriously.
 
 ### Roles
 
-Pick whichever role fits your interest — no application process, fully open for inquiry. Ask away, give your Github credentials, and we will add you as a Collaborator to the repository!!
+*All coding roles: you should genuinely understand every line you submit, including AI-assisted code — "it works" isn't a substitute for being able to explain it.*
 
-| Role | What you'd actually do | Good for |
+| Role | Responsibilities | Requirements |
 |---|---|---|
-| 🖼️ **Bot Aesthetic Designer** | Design profile picture, about icon, welcome page, and overall aesthetics | No requirements needed at all |
-| 🐍 **Bot Developer** | Write Python handlers for Telegram events (commands, message logging) | Anyone comfortable with basic Python (loops, functions) |
-| 🧠 **LLM/Prompt Engineer** | Design and test the prompts that turn raw chat logs into good summaries | Curiosity about AI/LLMs — no ML background needed |
-| 🗄️ **Database Helper** | Work with SQLite queries for storing/retrieving messages | Basic Python; SQL is a bonus, not a requirement |
-| ⚙️ **DevOps** | Get the bot running 24/7 (hosting, env vars/secrets, basic CI, restarts on crash) | Command-line comfort; no infra experience needed — mostly following deployment guides |
-| 🎨 **UX / Format Designer** | Decide how summaries should read (highly effective bullet points), test real outputs | No coding required — just good judgment and feedback |
-| 📝 **Docs & Onboarding** | Write/improve README, setup guides, comments in code | Great first contribution — no coding required |
-| 🐛 **QA / Tester** | Run the bot in a real chat, find bugs, file clear issues | No coding required — just patience and attention to detail |
-| 👀 **Reviewer** | Read others' pull requests, leave feedback before merging | Some Python reading ability, not necessarily writing |
-|  👾 **null** | null | null |
-
-### Skill Requirements
-
-- **Required:** willingness to learn, detail-oriented code review/writing fundamental Python *(only for coding roles — Docs, QA, and UX roles need none of this)*
-- **Not required:** prior bot development, prior open-source experience, Git mastery (we'll help you with your first PR)
-- **Helpful but optional:** familiarity with APIs, SQL, or prompt engineering — you'll pick this up by contributing, not before
+| 🎨 **Bot Aesthetic Designer** | Profile picture, icons, welcome page, overall look | Anyone with an eye for design |
+| 🛠️ **Bot Developer** | Python handlers for Telegram events (commands, message logging) | Basic Python (loops, functions) |
+| 🧠 **LLM/Prompt Engineer** | Design and test prompts that turn chat logs into good summaries | Curiosity about AI/LLMs — no ML background needed, but you should understand *why* a prompt works |
+| 🛢️ **Database Helper** | Database queries for storing/retrieving messages | Basic Python; SQL is a bonus |
+| ⚙️ **DevOps** | Hosting, environment variables/secrets, basic CI, crash restarts | Comfortable with the command line; deployment guides provided |
+| 🖌️ **UX/Format Designer** | Decide how summaries should read, test real outputs | Good judgment and meaningful feedback |
+| 📝 **Docs & Onboarding** | Improve the README, setup guides, code comments | Good english, readability and basic formatting knowledge |
+| 🧪 **QA/Tester** | Run the bot in a real chat, find and file bugs | Patience and attention to detail |
+| 🔎 **Reviewer** | Read pull requests, give feedback before merging | Understands basic Python |
 
 ### How to Contribute
 
 **Prerequisite**: Have Collaborator access to the repository after position inquiry
 
-1. Either **clone** the repository locally or run it in a **Codespace**
-2. Once you get to your IDE, go to Bash, type **git checkout -b feature/short-description** to start your contribution
-3. Check the **Issues** tab — look for labels like `good first issue` or the role tag matching your interest
-4. Comment on the issue to claim it (avoids two people doing the same thing)
-5. Make your change, **git commit** your branch, then open a **Pull Request** — describe what you did and why
-6. A maintainer reviews it, suggests changes if needed, and merges it in
+See [CONTRIBUTING.md](https://github.com/EAZYCODER2415/tg-niche-summarizer_bot/blob/main/CONTRIBUTING.md) for full setup instructions, coding conventions, and contribution guidelines.
 
-See [CONTRIBUTING.md](https://github.com/EAZYCODER2415/tg-niche-summarizer_bot/blob/main/CONTRIBUTING.md) for full setup instructions and coding conventions.
-
-### Not Sure Where to Start?
-
-Message **@StealrunNshoot** on Telegram — we'll help match you to something that fits your comfort level.
+<details>
+  <summary><b>Not sure where to start?</b></summary>
+  
+  Message [@StealrunNshoot](https://t.me/StealrunNshoot) on Telegram and we'll help you get started and clarify any doubts you may have.
+</details>
 
 ## 📈 Current Work Plan
-The steps to the work plan of this project are as follows:
 
-1. Configure the bot and use the API to write its config setup, set event calls to send messages, and identify needed message parameters.
-2. LLM API that computes text messages and other specific media, based on given parameters and time-based.
-3. Connect both APIs together to create an agentic info transfer system (input from Telegram -> LLM summarize output -> Send its output via Telegram)!
-4. Overall testing, QA, and revision cycle in debugging **(LONGEST PHASE)**
-5. Web/Server Hosting **(FINAL DESTINATION)**
+1. Configure the bot: API setup, event calls, message parameters.
+2. Build the LLM pipeline for summarizing text and media by time/topic.
+3. Connect the two into one pipeline: Telegram → LLM → Telegram.
+4. Testing, QA, and revision (longest phase).
+5. Web/server hosting (final step).
 
-## :dependabot: Conclusion
-Thank you for checking this repository out, have a nice day! If you are interested in contributing with the project, send me a Telegram DM **(@StealrunNshoot)** and indicate you desired position!!
+## 📌 Conclusion
 
+Thanks for checking out this repo! Again, do support us by starring the repository. Looking forward to your contributions!

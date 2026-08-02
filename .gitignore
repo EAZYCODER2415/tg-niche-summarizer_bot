@@ -219,6 +219,8 @@ __marimo__/
 
 # Ignore node_modules
 node_modules/
+package-lock.json
+package.json
  
 # SQLite database file
 *.db

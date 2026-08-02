@@ -1,4 +1,4 @@
-<!-- Go to the "Create Pull Request" dropdown below and choose "Create Draft Pull Request" unless you want reviewers to step in. -->
+<!-- Click "Convert to draft" unless your pull request is ready for review, to avoid unnecessary attention. -->
 
 ## What does this PR do?
 

@@ -1,4 +1,4 @@
-<!--Click "Convert to draft" unless your pull request is ready for review to avoid unnecessary attention.-->
+<!-- Click "Convert to draft" unless your pull request is ready for review, to avoid unnecessary attention. -->
 
 ## What does this PR do?
 
@@ -6,9 +6,9 @@
 
 ## How was this tested?
 
-<!-- e.g. "Ran locally in a test group chat", "Tested in a Codespace", etc. -->
+<!-- e.g. "Ran locally in a test group chat", "Tested in a Codespace", etc. Write "NA" if no test is needed and leave the 3rd checkbox empty under the Checklist section. -->
 
-<!--If your pull request closes a GitHub issue, replace the XXXX below with the issue number.-->
+<!-- If your pull request closes a GitHub issue, replace the XXXX below with the issue number. -->
 Closes #XXXX
 
 ## Checklist

@@ -36,15 +36,11 @@ logger = logging.getLogger(__name__)
 # --- Handlers ----------------------------------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        f'''Hi! I'm your group summary bot. Add me to a chat and I'll start
-        keeping track of the conversation.
-        
-        /summarize [time (in hrs)] [topic (str format)]:
-        Summarize a conversation within given time parameter (calculated in hours)
-        and topic parameter enclosed in quotation marks
-        
-        When sending messages with attachments, add a #summarize tag to include them
-        inside the summary data.'''
+        f'''Hi! I'm your group summary bot. Add me to a chat and I'll start keeping track of the conversation.
+
+        /summarize [time (in hrs)] [topic (str format)]: Summarize a conversation within given time parameter (calculated in hours) and topic parameter enclosed in quotation marks
+
+        When sending messages with attachments, add a #summarize tag to include them inside the summary data.'''
     )
 
 
@@ -84,6 +80,7 @@ def get_attachment_info(message):
     """Detects if a message has any attachment and returns (has_attachment, attachment_type)."""
     if message.photo:
         return True, "image"
+    '''
     elif message.video:
         return True, "video"
     elif message.document:
@@ -96,7 +93,7 @@ def get_attachment_info(message):
         return True, "video_note"
     elif message.sticker:
         return True, "sticker"
-    
+    '''
     return False, None
 
 def begin_processing(chat_id, user, attachment_type):
@@ -122,9 +119,34 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     text = update.message.caption if has_attachment else update.message.text
     text = (text or "").strip()
 
+    # Extract and download file information if there's an attachment, as well as its properties.
+    file_id = None
+    file_name = None
+    local_path = None
+    mime_type = None
+    file_size = None
+
     # IF message has ANY attachment AND text/caption is "#summarize":
     if has_attachment and "#summarize" in text.lower():
-        begin_processing(chat_id, user, attachment_type)
+        if attachment_type == "image":
+            begin_processing(chat_id, user, attachment_type)
+            photo = update.message.photo[-1]  # Highest resolution variant
+            file_id = photo.file_id
+            file_size = photo.file_size
+            mime_type = "image/jpeg"
+            attachment_type = "photo"
+
+            # Generate a fallback filename since photos don't carry original file names
+            file_name = f"photo_{file_id[:10]}.jpg"
+
+            # Limit downloads to standard Bot API cap (20 MB)
+            if file_size <= 20 * 1024 * 1024:
+                os.makedirs("downloads", exist_ok=True)
+                local_path = f"downloads/{file_id}.jpg"
+                
+                # Fetch file object and download raw image bytes to disk
+                telegram_file = await context.bot.get_file(file_id)
+                await telegram_file.download_to_drive(custom_path=local_path)
 
     try:
         if has_attachment and "#summarize" in text.lower():
@@ -137,6 +159,11 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     text=text,
                     has_attachment=has_attachment,
                     attachment_type=attachment_type,
+                    file_id=file_id,
+                    file_name=file_name,
+                    local_path=local_path,
+                    mime_type=mime_type,
+                    file_size=file_size,
                     timestamp=timestamp
                 )
             elif chat_type == "private":
@@ -148,6 +175,11 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     text=text,
                     has_attachment=has_attachment,
                     attachment_type=attachment_type,
+                    file_id=file_id,
+                    file_name=file_name,
+                    local_path=local_path,
+                    mime_type=mime_type,
+                    file_size=file_size,
                     timestamp=timestamp
                 )
         else:
@@ -159,7 +191,12 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     user=user,
                     text=text,
                     has_attachment=0,
-                    attachment_type=NULL,
+                    attachment_type=None,
+                    file_id=None,
+                    file_name=None,
+                    local_path=None,
+                    mime_type=None,
+                    file_size=None,
                     timestamp=timestamp
                 )
             elif chat_type == "private":
@@ -170,7 +207,12 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     user=user,
                     text=text,
                     has_attachment=0,
-                    attachment_type=NULL,
+                    attachment_type=None,
+                    file_id=None,
+                    file_name=None,
+                    local_path=None,
+                    mime_type=None,
+                    file_size=None,
                     timestamp=timestamp
                 )
             logger.info(f"Logged message from {user} in chat {chat_id}")

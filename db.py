@@ -24,12 +24,17 @@ def init_db():
                 text TEXT NOT NULL,
                 has_attachment BOOLEAN DEFAULT 0,
                 attachment_type TEXT,
+                file_id TEXT,
+                file_name TEXT,
+                local_path TEXT,
+                mime_type TEXT,
+                file_size INTEGER,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
 
-def log_message(chat_id, chat_type, chat_title, user, text, has_attachment=False, attachment_type=None, timestamp=None):
+def log_message(chat_id, chat_type, chat_title, user, text, has_attachment=False, attachment_type=None, file_id=None, file_name=None, local_path=None, mime_type=None, file_size=None, timestamp=None):
     """Log a message, including attachment flags and attachment type."""
     att_flag = 1 if has_attachment else 0
     
@@ -38,18 +43,18 @@ def log_message(chat_id, chat_type, chat_title, user, text, has_attachment=False
         if timestamp:
             cursor.execute(
                 """
-                INSERT INTO messages (chat_id, chat_type, chat_title, user, text, has_attachment, attachment_type, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO messages (chat_id, chat_type, chat_title, user, text, has_attachment, attachment_type, file_id, file_name, local_path, mime_type, file_size, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (chat_id, chat_type, chat_title, user, text, att_flag, attachment_type, timestamp)
+                (chat_id, chat_type, chat_title, user, text, att_flag, attachment_type, file_id, file_name, local_path, mime_type, file_size, timestamp)
             )
         else:
             cursor.execute(
                 """
-                INSERT INTO messages (chat_id, chat_type, chat_title, user, text, has_attachment, attachment_type)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO messages (chat_id, chat_type, chat_title, user, text, has_attachment, attachment_type, file_id, file_name, local_path, mime_type, file_size, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (chat_id, chat_type, chat_title, user, text, att_flag, attachment_type)
+                (chat_id, chat_type, chat_title, user, text, att_flag, attachment_type, file_id, file_name, local_path, mime_type, file_size, timestamp)
             )
         
 
@@ -65,7 +70,7 @@ def get_messages(chat_id, since=None):
         else:
             cursor.execute(
                 "SELECT user, text, timestamp FROM messages WHERE chat_id = ? ORDER BY timestamp ASC",
-                (chat_id,),
+                (chat_id, None),
             )
         messages = cursor.fetchall()
         return messages

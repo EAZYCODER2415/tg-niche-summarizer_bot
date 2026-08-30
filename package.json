@@ -53,6 +53,6 @@
     }
   },
   "dependencies": {
-    "cz-conventional-changelog": "^3.3.0"
+    "cz-conventional-changelog": "^3.0.1"
   }
 }

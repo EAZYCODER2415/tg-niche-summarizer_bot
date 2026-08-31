@@ -15,6 +15,15 @@ import os
 import db
 from db import init_db
 
+import summarizer
+from summarizer import summarizeLLMtool, checkForTopic
+
+import datetime
+from datetime import datetime, timedelta
+
+# Timeout check
+import asyncio
+
 # Setup Telegram API libraries
 from telegram import Update
 from telegram.ext import (
@@ -36,45 +45,154 @@ logger = logging.getLogger(__name__)
 # --- Handlers ----------------------------------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        f'''Hi! I'm your group summary bot. Add me to a chat and I'll start keeping track of the conversation.
-
-        /summarize [time (in hrs)] [topic (str format)]: Summarize a conversation within given time parameter (calculated in hours) and topic parameter enclosed in quotation marks
-
-        When sending messages with attachments, add a #summarize tag to include them inside the summary data.'''
+        f"Hi! I'm your group summary bot. Add me to a chat and I'll start keeping track of the conversation.\n\n"
+        f"/summarize [time (in hrs)] [[topic (str format)]]: Summarize a conversation within given time parameter (calculated in hours) and topic parameter enclosed in single quotation marks ('')\n"
+        f"REMARKS: Hours in either integers or decimals are acceptable.\n\n"
+        f"When sending messages with attachments, add a #summarize tag to include them inside the summary data."
     )
 
+def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=None):
+    print(f"DEBUG: querying chat_id={chat_id}, thread_id={thread_id}")
+    # Calculate the timestamp threshold based on the 'hours' lookback parameter
+    since_time = db.get_latest_message(chat_id=chat_id, thread_id=thread_id)
+
+    # 1. Check if there are messages within the time window
+    total_count = db.count_messages(chat_id=chat_id, thread_id=thread_id, since=since_time, hours=hours)
+    print(f"DEBUG: Retrieved {total_count} messages from DB")
+    
+    if total_count == 0:
+        return None, None
+
+    # 2. Retrieve messages from database
+    messages = db.get_messages(chat_id=chat_id, thread_id=thread_id, since=since_time, hours=hours)
+    print(f"DEBUG: Retrieved {len(messages)} messages from DB")
+
+    prompt_lines = []
+    image_url_lines = []
+
+    # 3. Format messages into a single prompt string for LLM
+    for msg in messages:
+        # Standardize record extraction based on db.py schema
+        # Assuming schema: (id, chat_id, chat_type, thread_id, chat_title, user, text, has_attachment, attachment_type, file_id, file_name, local_path, mime_type, file_size, timestamp)
+        user_name = msg["user"]
+        text_content = msg["text"]
+        has_attachment = msg["has_attachment"]
+        local_path = msg["local_path"]  # or public URL/file_id depending on storage
+        timestamp = msg["timestamp"]
+
+        if text_content:
+            message = f"{timestamp} | {user_name}: {text_content}"
+            if has_attachment and local_path:
+                image_data = f"{timestamp} | {local_path}"
+            else:
+                image_data = None
+
+            if topic:
+                if image_data:
+                    thereIsTopic = checkForTopic(message, topic, image_data)
+                else:
+                    thereIsTopic = checkForTopic(message, topic)
+            else:
+                thereIsTopic = 0
+
+            if not topic or thereIsTopic:
+                prompt_lines.append(message)
+
+                # Capture the latest image/attachment if tagged/present
+                if has_attachment and local_path:
+                    image_url_lines.append(f"{timestamp} | {local_path}")
+
+    # Truncate database messages to be within 100 messages.
+    MAX_MESSAGES = 100
+    if len(prompt_lines) > MAX_MESSAGES:
+        messages = messages[-MAX_MESSAGES:]  # Keep the 100 most recent messages
+
+    if len(image_url_lines) > MAX_MESSAGES:
+        messages = messages[-MAX_MESSAGES:]  # Keep the 100 most recent images
+
+    prompt = "\n".join(prompt_lines)
+
+    if len(image_url_lines) != 0:
+        image_url = "\n".join(image_url_lines)
+    else:
+        image_url = None
+    
+    return prompt, image_url
 
 async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     buffered = db.get_messages(chat_id)
+
     # No messages buffered in database.
     if not buffered:
         await update.message.reply_text("No messages logged yet to summarize.")
         return
 
+    # Extract thread_id if inside a supergroup topic
+    thread_id = (
+        update.effective_message.message_thread_id
+        if update.effective_chat.type == "supergroup"
+        else None
+    )
+
     # Included parameters
-    hours = 24 # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
+    hours = 24.0 # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
     topic = '' # No topic as default, topic parameter in string format.
+
+    if not context.args:
+        await update.message.reply_text(
+            "Please specify the number of hours. Usage: /summarize [hours] [[topic (optional)]]"
+        )
+        return
+
     if context.args:
         try:
-            hours = int(context.args[0]) # Parameter can arrive in int format
-            if len(context.args) == 2:
-                topic = str(context.args[0]) # Parameter can arrive in int format
-        except ValueError:
+            hours = float(context.args[0]) # Parameter can arrive in any format (integer or decimal)
+            if len(context.args) >= 2:
+                topic = str(context.args[1])
+        except ValueError or hours == "":
             await update.message.reply_text(
-                "Invalid parameters. Usage: /summarize [numerical hours] '[topic (optional)]'"
+                "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
             )
             return
 
-    # Placeholder — this is exactly where the LLM call will slot in.
-    # e.g. summary = await call_llm_summarizer(buffered)
-    await update.message.reply_text(
-        f"[Placeholder] I've summarized {len(buffered)} messages since last {hours}"
-        f"hours. sike LLM summarization isn't connected yet."
-    )
+    # This is exactly where the LLM call will slot in.
+    prompt, image_url = create_messageThread(chat_id, hours, thread_id, topic)
 
-    # Once summarization is live, you'd typically clear the buffer here:
-    # message_buffer[chat_id] = []
+    # Run summarizeLLMtool function while keeping a 30-second time limit to prevent lagging
+    try:
+        if prompt and image_url:
+            summary = await asyncio.wait_for(
+                asyncio.to_thread(summarizeLLMtool, prompt, image_url), 
+                timeout=30.0
+            )
+        elif prompt:
+            summary = await asyncio.wait_for(
+                asyncio.to_thread(summarizeLLMtool, prompt), 
+                timeout=30.0
+            )
+        else:
+            await update.message.reply_text("⚠️ Failed to generate summary. Cannot fetch data.")
+    
+        if not summary:
+            await update.message.reply_text("⚠️ Failed to generate summary.")
+        else:
+            # Helper to chunk long text to safe limits (4000 chars)
+            MAX_LEN = 4000
+    
+            if len(summary) >= MAX_LEN:
+                for i in range(0, len(summary), MAX_LEN):
+                    await update.message.reply_text(summary[i : i + MAX_LEN])
+            else:
+                for i in range(0, len(summary), MAX_LEN):
+                        await update.message.reply_text(summary[i : i + MAX_LEN])
+    except asyncio.TimeoutError:
+        # This triggers if summarizeLLMtool takes longer than 30 seconds
+        await update.message.reply_text("⏱️ Error: The request took longer than 30 seconds to complete. Please try again.")
+
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ An unexpected error occurred: {e}")
+
 
 def get_attachment_info(message):
     """Detects if a message has any attachment and returns (has_attachment, attachment_type)."""
@@ -91,8 +209,6 @@ def get_attachment_info(message):
         return True, "voice"
     elif message.video_note:
         return True, "video_note"
-    elif message.sticker:
-        return True, "sticker"
     '''
     return False, None
 
@@ -103,8 +219,8 @@ def begin_processing(chat_id, user, attachment_type):
 
 async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Buffers every text message in a group chat for later summarization."""
-    if not update.message:
-        return  # Ignore non-text messages
+    if not update.message or update.message.sticker or update.message.text == "" or update.message.caption == "":
+        return  # Ignore non-text messages and stickers
 
     chat_id = update.effective_chat.id
     chat_type = update.effective_chat.type
@@ -112,12 +228,20 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     user = update.message.from_user.username or update.message.from_user.first_name
     timestamp = update.message.date.strftime("%Y-%m-%d %H:%M:%S")
 
+    # Extract thread_id if inside a supergroup topic
+    thread_id = (
+        update.effective_message.message_thread_id
+        if update.effective_chat.type == "supergroup"
+        else None
+    )
+
     # Detect any attachment type
     has_attachment, attachment_type = get_attachment_info(update.message)
 
     # Extract text (Telegram uses 'caption' for media/attachments, 'text' for regular text)
     text = update.message.caption if has_attachment else update.message.text
-    text = (text or "").strip()
+    if update.message and update.message.text:
+        text = update.message.text.strip()
 
     # Extract and download file information if there's an attachment, as well as its properties.
     file_id = None
@@ -127,7 +251,7 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     file_size = None
 
     # IF message has ANY attachment AND text/caption is "#summarize":
-    if has_attachment and "#summarize" in text.lower():
+    if has_attachment and ("#summarize" in text.lower()):
         if attachment_type == "image":
             begin_processing(chat_id, user, attachment_type)
             photo = update.message.photo[-1]  # Highest resolution variant
@@ -154,6 +278,7 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 db.log_message(
                     chat_id=chat_id,
                     chat_type=chat_type,
+                    thread_id=thread_id,
                     chat_title=chat_title,
                     user=user,
                     text=text,
@@ -170,6 +295,7 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 db.log_message(
                     chat_id=chat_id,
                     chat_type=chat_type,
+                    thread_id=thread_id,
                     chat_title="Private Chat",
                     user=user,
                     text=text,
@@ -187,6 +313,7 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 db.log_message(
                     chat_id=chat_id,
                     chat_type=chat_type,
+                    thread_id=thread_id,
                     chat_title=chat_title,
                     user=user,
                     text=text,
@@ -203,6 +330,7 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 db.log_message(
                     chat_id=chat_id,
                     chat_type=chat_type,
+                    thread_id=thread_id,
                     chat_title="Private Chat",
                     user=user,
                     text=text,

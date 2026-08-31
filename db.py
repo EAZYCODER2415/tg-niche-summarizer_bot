@@ -8,7 +8,7 @@ in a SQLite database from Telegram handlers.
 """
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 def init_db():
     """Initialize the SQLite database and create the messages table if it doesn't exist."""
@@ -119,7 +119,7 @@ def clear_messages(chat_id, thread_id=None):
         if thread_id is not None:
             cursor.execute("DELETE FROM messages WHERE chat_id = ? AND thread_id = ?", (chat_id, thread_id))
         else:
-            cursor.execute("DELETE FROM messages WHERE chat_id = ? AND thread_id IS NULL", (chat_id,))
+            cursor.execute("DELETE FROM messages WHERE chat_id = ? AND thread_id IS NULL", (chat_id))
 
 def count_messages(chat_id, thread_id=None, since:str=None, hours:float=None):
     """Count the number of messages for a specific chat_id, optionally since a certain timestamp til a certain hour."""

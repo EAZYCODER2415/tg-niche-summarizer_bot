@@ -1,5 +1,5 @@
 """
-Telegram Summary Bot — Skeleton Ver.
+Telegram Summary Bot
 ----------------------------------------
 Connection to Telegram, listens to event triggers from commands, computes messages and evaluates summary with LLM AI.
 
@@ -13,16 +13,15 @@ import logging
 import os
 
 import db
-from db import init_db
+from db import init_db, delete_old_messages
 
-import summarizer
 from summarizer import summarizeLLMtool, checkForTopic
-
-import datetime
-from datetime import datetime, timedelta
 
 # Timeout check
 import asyncio
+
+# Convert local path of images to Base64 URIs
+from imgEncode import encode_image_to_base64
 
 # Setup Telegram API libraries
 from telegram import Update
@@ -41,12 +40,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Variables for Activity-Based Trigger
+COUNTER_THRESHOLD = 50
+
 
 # --- Handlers ----------------------------------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         f"Hi! I'm your group summary bot. Add me to a chat and I'll start keeping track of the conversation.\n\n"
-        f"/summarize [time (in hrs)] [[topic (str format)]]: Summarize a conversation within given time parameter (calculated in hours) and topic parameter enclosed in single quotation marks ('')\n"
+        f"/summarize [time (in hrs)] [[topic (str format)]]: Summarize a conversation within given time parameter (calculated in hours) and topic parameter enclosed in square brackets ([]).\n"
         f"REMARKS: Hours in either integers or decimals are acceptable.\n"
         f"Topics should be a single keyword enclosed in square brackets (in the case of multiple keywords, all keywords must not have blank spaces in between).\n\n"
         f"When sending messages with attachments, add a #summarize tag to include them inside the summary data."
@@ -59,14 +61,12 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
 
     # 1. Check if there are messages within the time window
     total_count = db.count_messages(chat_id=chat_id, thread_id=thread_id, since=since_time, hours=hours)
-    print(f"DEBUG: Retrieved {total_count} messages from DB")
     
     if total_count == 0:
         return None, None
 
     # 2. Retrieve messages from database
     messages = db.get_messages(chat_id=chat_id, thread_id=thread_id, since=since_time, hours=hours)
-    print(f"DEBUG: Retrieved {len(messages)} messages from DB")
 
     prompt_lines = []
     image_url_lines = []
@@ -84,7 +84,10 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
         if text_content:
             message = f"{timestamp} | {user_name}: {text_content}"
             if has_attachment and local_path:
-                image_data = f"{timestamp} | {local_path}"
+                # Convert local path to Base64 URI before processing
+                if os.path.exists(local_path):
+                    base64_image = encode_image_to_base64(local_path)
+                image_data = base64_image
             else:
                 image_data = None
 
@@ -95,15 +98,13 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
                     thereIsTopic = checkForTopic(message, topic)
             else:
                 thereIsTopic = 0
-            
-            print(f"DEBUG: Message check for topic '{topic}' returned: {thereIsTopic}")
 
             if not topic or thereIsTopic:
                 prompt_lines.append(message)
 
                 # Capture the latest image/attachment if tagged/present
                 if has_attachment and local_path:
-                    image_url_lines.append(f"{timestamp} | {local_path}")
+                    image_url_lines.append(base64_image)
 
     # Show status if a topic is added into the parameters
     if topic:
@@ -366,8 +367,40 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     timestamp=timestamp
                 )
             logger.info(f"Logged message from {user} in chat {chat_id}")
+
+        # ACTIVITY-BASED TRIGGER SECTION HERE
+
+        # Initialize bot_data dict if not present
+        if "chat_counters" not in context.bot_data:
+            context.bot_data["chat_counters"] = {}
+
+        # Initialize composite key: (chat_id, chat_type, thread_id)
+        counter_key = (chat_id, chat_type, thread_id)
+        
+        # Increment counter for this specific composite key
+        current_count = context.bot_data["chat_counters"].get(counter_key, 0) + 1
+        context.bot_data["chat_counters"][counter_key] = current_count
+
+        logger.info(
+            f"Logged message {current_count}/{COUNTER_THRESHOLD} "
+            f"for chat {chat_id} ({chat_type}, thread: {thread_id})"
+        )
+
+        # Check threshold for this chat
+        if current_count >= COUNTER_THRESHOLD:
+            logger.info(
+                f"Activity threshold reached (50 msgs) for key {counter_key}. "
+                f"Triggering automatic summary..."
+            )
+            context.bot_data["chat_counters"][counter_key] = 0  # Reset for this specific chat
+            
+            # Non-blocking async task so log_message finishes immediately
+            asyncio.create_task(summarize(update, context))
+
     except Exception as e:
         logger.error(f"Failed to log message: {e}")
+
+    
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):

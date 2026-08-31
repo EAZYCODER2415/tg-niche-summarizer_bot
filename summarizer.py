@@ -27,10 +27,16 @@ with open(PROMPT_FILE, "r", encoding="utf-8") as f:
     system_instruction = f.read()
 
 # The FREE MODEL list (in case Qwen doesn't work)
+# free_models = [
+#     "meta-llama/llama-3.3-70b-instruct:free",
+#     "google/gemini-2.0-flash-exp:free",    # Multimodal (Text + Vision)
+#     "qwen/qwen2.5-vl-72b-instruct:free"    # Multimodal (Text + Vision - correct slug)
+# ]
+
 free_models = [
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "google/gemini-2.0-flash-exp:free",
-    "mistralai/mistral-7b-instruct:free"
+    "openrouter/free",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "google/gemma-4-31b-it:free"
 ]
 
 def summarizeLLMtool(prompt: str, image_url: str = None) -> str:

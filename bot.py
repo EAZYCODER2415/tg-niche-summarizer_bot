@@ -47,7 +47,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         f"Hi! I'm your group summary bot. Add me to a chat and I'll start keeping track of the conversation.\n\n"
         f"/summarize [time (in hrs)] [[topic (str format)]]: Summarize a conversation within given time parameter (calculated in hours) and topic parameter enclosed in single quotation marks ('')\n"
-        f"REMARKS: Hours in either integers or decimals are acceptable.\n\n"
+        f"REMARKS: Hours in either integers or decimals are acceptable.\n"
+        f"Topics should be a single keyword enclosed in square brackets (in the case of multiple keywords, all keywords must not have blank spaces in between).\n\n"
         f"When sending messages with attachments, add a #summarize tag to include them inside the summary data."
     )
 
@@ -94,6 +95,8 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
                     thereIsTopic = checkForTopic(message, topic)
             else:
                 thereIsTopic = 0
+            
+            print(f"DEBUG: Message check for topic '{topic}' returned: {thereIsTopic}")
 
             if not topic or thereIsTopic:
                 prompt_lines.append(message)
@@ -102,6 +105,10 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
                 if has_attachment and local_path:
                     image_url_lines.append(f"{timestamp} | {local_path}")
 
+    # Show status if a topic is added into the parameters
+    if topic:
+        print(f"Retrieved {len(prompt_lines)} that match topic of '{topic}'!")
+    
     # Truncate database messages to be within 100 messages.
     MAX_MESSAGES = 100
     if len(prompt_lines) > MAX_MESSAGES:
@@ -148,6 +155,13 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if context.args:
         try:
             hours = float(context.args[0]) # Parameter can arrive in any format (integer or decimal)
+
+            if hours > 72.0 and hours < 0.0:
+                await update.message.reply_text(
+                    "Invalid time range. Please input within range 0-72 hours."
+                )
+                return
+
             if len(context.args) >= 2:
                 topic = str(context.args[1])
         except ValueError or hours == "":
@@ -158,6 +172,14 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     # This is exactly where the LLM call will slot in.
     prompt, image_url = create_messageThread(chat_id, hours, thread_id, topic)
+
+    # Check for valid prompt return
+    if not prompt:
+        await update.message.reply_text("⚠️ No relevant messages found for this topic.")
+        return
+    
+    # Initialize summary
+    summary = None
 
     # Run summarizeLLMtool function while keeping a 30-second time limit to prevent lagging
     try:
@@ -352,6 +374,11 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     """Log errors caused by updates."""
     logger.error("Exception while handling an update:", exc_info=context.error)
 
+async def cleanup_database(context):
+    """Job callback to clean up old messages."""
+    deleted_count = delete_old_messages()
+    print(f"[Cleanup] Deleted {deleted_count} messages older than 72 hours.")
+
 # --- App setup -----------------------------------------------------------
 def main() -> None:
     # Initialize SQL database library
@@ -386,6 +413,10 @@ def main() -> None:
     # Polling is a mechanism in which the Telegram bot is maintained in activity from detecting updates at all times.
     logger.info("Bot starting (polling mode)...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+    # Run cleanup every hour (3600 seconds)
+    job_queue = application.job_queue
+    job_queue.run_repeating(cleanup_database, interval=3600, first=10)
 
 # Run the whole code
 if __name__ == "__main__":

@@ -156,7 +156,7 @@ def count_messages(chat_id, thread_id=None, since:str=None, hours:float=None):
         cursor.execute(query, params)
         return cursor.fetchone()[0]
 
-def get_latest_message(chat_id: int, thread_id: int=None) -> str:
+def get_latest_message(chat_id: int=None, thread_id: int=None) -> str:
     """
     Retrieves the most recent message record from the database.
     Returns timestamp or None if the database is empty.
@@ -165,20 +165,51 @@ def get_latest_message(chat_id: int, thread_id: int=None) -> str:
         conn.row_factory = sqlite3.Row # prevent numerical index positions, so use dicts instead
         cursor = conn.cursor()
 
-        # Build clean parameter list
-        params = [chat_id]
-        
-        # General topic (NULL or 1) vs Specific Thread Topic
-        if thread_id is None or thread_id == 1:
-            thread_clause = "AND (thread_id IS NULL OR thread_id = 1)"
-        else:
-            thread_clause = "AND thread_id = ?"
-            params.append(int(thread_id))
+        if chat_id:
+            # Build clean parameter list
+            params = [chat_id]
 
-        query = f"SELECT timestamp FROM messages WHERE chat_id = ? {thread_clause} ORDER BY id DESC LIMIT 1"
+            # General topic (NULL or 1) vs Specific Thread Topic
+            if thread_id is None or thread_id == 1:
+                thread_clause = "AND (thread_id IS NULL OR thread_id = 1)"
+            else:
+                thread_clause = "AND thread_id = ?"
+                params.append(int(thread_id))
+
+        if chat_id:
+            query = f"SELECT timestamp FROM messages WHERE chat_id = ? {thread_clause} ORDER BY id DESC LIMIT 1"
+        else:
+            query = f"SELECT timestamp FROM messages WHERE ORDER BY id DESC LIMIT 1"
 
         cursor.execute(query, params)
         row = cursor.fetchone()
         
         return row[0] if row else None
+
+def delete_old_messages(db_path: str = "messages.db", hours: int = 72) -> int:
+    """Deletes messages older than the specified number of hours."""
+    with sqlite3.connect("messages.db") as conn:
+        conn.row_factory = sqlite3.Row # prevent numerical index positions, so use dicts instead
+        cursor = conn.cursor()
+
+        # Retrieve timestamp of most recent message
+        since_time = get_latest_message()
+        if not since_time:
+            return 0  # Database is empty
+        
+        latest_dt = datetime.fromisoformat(since_time) # has T and is a datetime object
+        latest_dt = latest_dt.isoformat(timespec="seconds") # becomes string
+        latest_dt = latest_dt.replace("T", " ") # removes T
+        params = [latest_dt, timestamp]
+        
+        # Safely pass latest_dt as a parameter; 'timestamp' is the table column
+        query = """
+            DELETE FROM messages 
+            WHERE (julianday(?) - julianday(timestamp)) * 24 >= ?
+        """
+
+        # Execute deletion
+        cursor.execute(query, (latest_dt, float(hours)))
+        conn.commit()
+        return cursor.rowcount
 

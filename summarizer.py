@@ -119,13 +119,13 @@ def checkForTopic(message: str, topic: str, image_url: str = None) -> bool:
                     "models": free_models
                 },
                 messages=[
-                    {"role": "system", "content": "You are detecting whether the given message (OR image local path if applicable) contains or is related to a specific topic input. Output 'True' if it fulfills the conditional and 'False' otherwise, respectively."},
+                    {"role": "system", "content": f"You are detecting whether the given message (OR image local path if applicable) contains or is related to a specific topic input: {topic}. ONLY output 'True' if it fulfills the conditional and 'False' if otherwise, respectively."},
                     {"role": "user", "content": content}
                 ],
                 timeout=25.0
             )
             
-            return response.choices[0].message.content == True
+            return response.choices[0].message.content == "True"
 
         except APIError as e:
             print(f"[Attempt {attempt + 1}/{max_retries}] OpenRouter Error: {e}")

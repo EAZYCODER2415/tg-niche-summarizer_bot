@@ -240,7 +240,9 @@ def get_latest_message(chat_id: int=None, thread_id: int=None) -> str:
         cursor.execute(query, params)
         row = cursor.fetchone()
         
-        return row[0] if row else None
+        if not row:
+            return None
+        return row["timestamp"] if DATABASE_URL else row[0]
 
 def delete_old_messages(hours: int = 72) -> int:
     """Deletes messages older than the specified number of hours."""

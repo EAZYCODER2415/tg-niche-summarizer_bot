@@ -7,18 +7,38 @@ in a SQLite database from Telegram handlers.
 
 """
 
+import os
 import sqlite3
 from datetime import datetime, timedelta
 
+import psycopg
+from psycopg.rows import dict_row
+
+DATABASE_URL = os.getenv("DATABASE_URL_POOLED") or os.getenv("DATABASE_URL")
+
+def get_connection():
+    """Returns a Neon PostgreSQL connection if DATABASE_URL is present, else SQLite."""
+    if DATABASE_URL:
+        # Neon PostgreSQL connection
+        return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+    else:
+        # Local SQLite fallback for offline development
+        conn = sqlite3.connect("messages.db")
+        conn.row_factory = sqlite3.Row
+        return conn
+
 def init_db():
     """Initialize the SQLite database and create the messages table if it doesn't exist."""
-    with sqlite3.connect("messages.db") as conn:
-        conn.row_factory = sqlite3.Row # prevent numerical index positions, so use dicts instead
+
+    id_type = "SERIAL PRIMARY KEY" if DATABASE_URL else "INTEGER PRIMARY KEY AUTOINCREMENT"
+
+    with get_connection() as conn:
+
         cursor = conn.cursor()
         cursor.execute(
-            """
+            f"""
             CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {id_type},
                 chat_id INTEGER NOT NULL,
                 chat_type TEXT NOT NULL,
                 thread_id INTEGER,
@@ -56,8 +76,7 @@ def log_message(
     """Log a message, including attachment flags and attachment type."""
     att_flag = 1 if has_attachment else 0
     
-    with sqlite3.connect("messages.db") as conn:
-        conn.row_factory = sqlite3.Row # prevent numerical index positions, so use dicts instead
+    with get_connection() as conn:
         cursor = conn.cursor()
         if timestamp:
             cursor.execute(
@@ -80,8 +99,7 @@ def log_message(
 def get_messages(chat_id: int, thread_id:int=None, since:str=None, hours:float=None):
     """Retrieve messages for a specific chat_id, optionally since a certain timestamp."""
 
-    with sqlite3.connect("messages.db") as conn:
-        conn.row_factory = sqlite3.Row # prevent numerical index positions, so use dicts instead
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         params = [chat_id]
@@ -106,15 +124,16 @@ def get_messages(chat_id: int, thread_id:int=None, since:str=None, hours:float=N
             thread_clause += " AND timestamp >= ?"
             params.append(cutoff_dt)
 
-        query = f"SELECT * FROM messages WHERE chat_id = ? {thread_clause} AND text IS NOT NULL AND text != '' ORDER BY id ASC"
+        query = f"SELECT * FROM messages WHERE chat_id = ? {thread_clause} AND text IS NOT NULL AND text != '' ORDER BY id DESC"
+        if hours is not None:
+           query += " LIMIT 50"
 
         cursor.execute(query, params)
         return cursor.fetchall()
 
 def clear_messages(chat_id, thread_id=None):
     """Clear all messages for a specific chat_id."""
-    with sqlite3.connect("messages.db") as conn:
-        conn.row_factory = sqlite3.Row # prevent numerical index positions, so use dicts instead
+    with get_connection() as conn:
         cursor = conn.cursor()
         if thread_id is not None:
             cursor.execute("DELETE FROM messages WHERE chat_id = ? AND thread_id = ?", (chat_id, thread_id))
@@ -124,8 +143,7 @@ def clear_messages(chat_id, thread_id=None):
 def count_messages(chat_id, thread_id=None, since:str=None, hours:float=None):
     """Count the number of messages for a specific chat_id, optionally since a certain timestamp til a certain hour."""
 
-    with sqlite3.connect("messages.db") as conn:
-        conn.row_factory = sqlite3.Row # prevent numerical index positions, so use dicts instead
+    with get_connection() as conn:
         cursor = conn.cursor()
         
         query = "SELECT COUNT(*) FROM messages WHERE chat_id = ? AND text IS NOT NULL AND text != ''"
@@ -161,8 +179,7 @@ def get_latest_message(chat_id: int=None, thread_id: int=None) -> str:
     Retrieves the most recent message record from the database.
     Returns timestamp or None if the database is empty.
     """
-    with sqlite3.connect("messages.db") as conn:
-        conn.row_factory = sqlite3.Row # prevent numerical index positions, so use dicts instead
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         if chat_id:
@@ -188,9 +205,7 @@ def get_latest_message(chat_id: int=None, thread_id: int=None) -> str:
 
 def delete_old_messages(db_path: str = "messages.db", hours: int = 72) -> int:
     """Deletes messages older than the specified number of hours."""
-    with sqlite3.connect("messages.db") as conn:
-        conn.row_factory = sqlite3.Row # prevent numerical index positions, so use dicts instead
-        cursor = conn.cursor()
+    with get_connection() as conn:
 
         # Retrieve timestamp of most recent message
         since_time = get_latest_message()

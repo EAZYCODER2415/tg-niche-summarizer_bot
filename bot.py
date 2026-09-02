@@ -21,7 +21,7 @@ from summarizer import summarizeLLMtool, checkForTopic
 import asyncio
 
 # Convert local path of images to Base64 URIs
-from imgEncode import encode_image_to_base64
+from imgStorage import safe_upload_image, encode_image_to_base64
 
 # Setup Telegram API libraries
 from telegram import Update
@@ -144,20 +144,13 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
     # Included parameters
-    hours = 24.0 # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
+    hours = None # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
     topic = '' # No topic as default, topic parameter in string format.
-
-    if not context.args:
-        await update.message.reply_text(
-            "Please specify the number of hours. Usage: /summarize [hours] [[topic (optional)]]"
-        )
-        return
 
     if context.args:
         try:
             hours = float(context.args[0]) # Parameter can arrive in any format (integer or decimal)
-
-            if hours > 72.0 and hours < 0.0:
+            if hours >= 72.0 and hours < 0.0:
                 await update.message.reply_text(
                     "Invalid time range. Please input within range 0-72 hours."
                 )
@@ -165,7 +158,7 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
             if len(context.args) >= 2:
                 topic = str(context.args[1])
-        except ValueError or hours == "":
+        except ValueError:
             await update.message.reply_text(
                 "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
             )
@@ -277,23 +270,27 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if has_attachment and ("#summarize" in text.lower()):
         if attachment_type == "image":
             begin_processing(chat_id, user, attachment_type)
-            photo = update.message.photo[-1]  # Highest resolution variant
+
+            # Get the highest resolution photo version
+            photo = update.message.photo[-1]
             file_id = photo.file_id
             file_size = photo.file_size
             mime_type = "image/jpeg"
             attachment_type = "photo"
 
+            # Download file bytes directly into memory (no local disk save)
+            telegram_file = await context.bot.get_file(file_id)
+            file_bytes = await telegram_file.download_as_bytearray()
+
             # Generate a fallback filename since photos don't carry original file names
             file_name = f"photo_{file_id[:10]}.jpg"
 
-            # Limit downloads to standard Bot API cap (20 MB)
-            if file_size <= 20 * 1024 * 1024:
-                os.makedirs("downloads", exist_ok=True)
-                local_path = f"downloads/{file_id}.jpg"
-                
-                # Fetch file object and download raw image bytes to disk
-                telegram_file = await context.bot.get_file(file_id)
-                await telegram_file.download_to_drive(custom_path=local_path)
+            try:
+                # Safe upload to R2 (handles 10 MB cap & 8 GB storage check)
+                local_path = safe_upload_image(bytes(file_bytes), file_name, content_type="image/jpeg")
+            except Exception as e:
+                print(f"Error uploading image to R2: {e}")
+                local_path = None
 
     try:
         if has_attachment and "#summarize" in text.lower():
@@ -399,8 +396,6 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     except Exception as e:
         logger.error(f"Failed to log message: {e}")
-
-    
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):

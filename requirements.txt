@@ -4,3 +4,4 @@ python-telegram-bot
 openai
 boto3
 psycopg
+aiohttp

@@ -27,6 +27,12 @@ def get_connection():
         conn.row_factory = sqlite3.Row
         return conn
 
+def execute_query(cursor, query: str, params: tuple = ()):
+    if DATABASE_URL:
+        # Automatically translate SQLite '?' placeholders to PostgreSQL '%s'
+        query = query.replace("?", "%s")
+    cursor.execute(query, params)
+
 def init_db():
     """Initialize the SQLite database and create the messages table if it doesn't exist."""
 
@@ -203,10 +209,10 @@ def get_latest_message(chat_id: int=None, thread_id: int=None) -> str:
         
         return row[0] if row else None
 
-def delete_old_messages(db_path: str = "messages.db", hours: int = 72) -> int:
+def delete_old_messages(hours: int = 72) -> int:
     """Deletes messages older than the specified number of hours."""
     with get_connection() as conn:
-
+        cursor = conn.cursor()
         # Retrieve timestamp of most recent message
         since_time = get_latest_message()
         if not since_time:
@@ -215,16 +221,23 @@ def delete_old_messages(db_path: str = "messages.db", hours: int = 72) -> int:
         latest_dt = datetime.fromisoformat(since_time) # has T and is a datetime object
         latest_dt = latest_dt.isoformat(timespec="seconds") # becomes string
         latest_dt = latest_dt.replace("T", " ") # removes T
-        params = [latest_dt, timestamp]
         
         # Safely pass latest_dt as a parameter; 'timestamp' is the table column
-        query = """
-            DELETE FROM messages 
-            WHERE (julianday(?) - julianday(timestamp)) * 24 >= ?
-        """
+        if DATABASE_URL:
+            query = """
+                DELETE FROM messages 
+                WHERE timestamp < NOW() - (%s || ' hours')::INTERVAL
+            """
+            cursor.execute(query, (str(hours),))
+        else:
+            query = """
+                DELETE FROM messages 
+                WHERE (julianday('now') - julianday(timestamp)) * 24 >= ?
+            """
+            # Execute deletion
+            cursor.execute(query, (float(hours),))
 
-        # Execute deletion
-        cursor.execute(query, (latest_dt, float(hours)))
+        deleted_count = cursor.rowcount
         conn.commit()
-        return cursor.rowcount
+        return deleted_count
 

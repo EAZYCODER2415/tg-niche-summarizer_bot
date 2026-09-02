@@ -13,6 +13,7 @@ import logging
 import os
 
 # HTTP Health Check Endpoint
+import aiohttp
 from aiohttp import web
 
 import db

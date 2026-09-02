@@ -144,7 +144,11 @@ def get_messages(chat_id: int, thread_id:int=None, since:str=None, hours:float=N
             params.append(int(thread_id))
             
         if since is not None:
-            latest_dt = datetime.fromisoformat(since) # has T and is a datetime object
+            if isinstance(since, str):
+                latest_dt = datetime.fromisoformat(since)
+            else:
+                latest_dt = since
+
             prev_latest_dt = latest_dt
             latest_dt = latest_dt.isoformat(timespec="seconds") # becomes string
             latest_dt = latest_dt.replace("T", " ") # removes T
@@ -184,7 +188,7 @@ def count_messages(chat_id, thread_id=None, since:str=None, hours:float=None):
         cursor = conn.cursor()
         placeholder = "%s" if DATABASE_URL else "?"
         
-        query = f"SELECT COUNT(*) FROM messages WHERE chat_id = {placeholder} AND text IS NOT NULL AND text != ''"
+        query = f"SELECT COUNT(*) AS total FROM messages WHERE chat_id = {placeholder} AND text IS NOT NULL AND text != ''"
         params = [chat_id]
 
         # Match both None and 1 for General topic, or exact ID for topics
@@ -195,14 +199,17 @@ def count_messages(chat_id, thread_id=None, since:str=None, hours:float=None):
             params.append(thread_id)
         
         if since is not None:
-            latest_dt = datetime.fromisoformat(since) # has T and is a datetime object
+            if isinstance(since, str):
+                latest_dt = datetime.fromisoformat(since)
+            else:
+                latest_dt = since
             prev_latest_dt = latest_dt
             latest_dt = latest_dt.isoformat(timespec="seconds") # becomes string
             latest_dt = latest_dt.replace("T", " ") # removes T
             query += f" AND timestamp <= {placeholder}"
             params.append(latest_dt)
             
-        if hours is not None:
+        if hours is not None and prev_latest_dt is not None:
             cutoff_dt = prev_latest_dt - timedelta(hours=hours) # has T and is a datetime object
             cutoff_dt = cutoff_dt.isoformat(timespec="seconds") # becomes string
             cutoff_dt = cutoff_dt.replace("T", " ") # removes T
@@ -210,7 +217,11 @@ def count_messages(chat_id, thread_id=None, since:str=None, hours:float=None):
             params.append(cutoff_dt)
 
         cursor.execute(query, params)
-        return cursor.fetchone()[0]
+        # Inside count_messages() in db.py
+        result = cursor.fetchone()
+
+        # Check if result exists and access by key
+        return result["total"] if result else 0
 
 def get_latest_message(chat_id: int=None, thread_id: int=None) -> str:
     """

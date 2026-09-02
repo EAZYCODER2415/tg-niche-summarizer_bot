@@ -5,3 +5,4 @@ openai
 boto3
 psycopg
 aiohttp
+python-telegram-bot[job-queue]>=20.0

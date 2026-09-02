@@ -308,8 +308,9 @@ def begin_processing(chat_id, user, attachment_type):
 
 async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Buffers every text message in a group chat for later summarization."""
-    if not update.message or update.message.sticker or update.message.text == "" or update.message.caption == "":
-        return  # Ignore non-text messages and stickers
+    # Ignore non-message updates, stickers, or messages without any text/caption content
+    if not update.message or update.message.sticker:
+        return
 
     chat_id = update.effective_chat.id
     chat_type = update.effective_chat.type
@@ -329,8 +330,7 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     # Extract text (Telegram uses 'caption' for media/attachments, 'text' for regular text)
     text = update.message.caption if has_attachment else update.message.text
-    if update.message and update.message.text:
-        text = update.message.text.strip()
+    text = (text or "").strip()
 
     # Extract and download file information if there's an attachment, as well as its properties.
     file_id = None

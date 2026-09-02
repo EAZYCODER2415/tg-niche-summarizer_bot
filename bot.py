@@ -12,6 +12,9 @@ Required Setup for each run:
 import logging
 import os
 
+# HTTP Health Check Endpoint
+from aiohttp import web
+
 import db
 from db import init_db, delete_old_messages
 
@@ -42,7 +45,6 @@ logger = logging.getLogger(__name__)
 
 # Variables for Activity-Based Trigger
 COUNTER_THRESHOLD = 50
-
 
 # --- Handlers ----------------------------------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -407,6 +409,19 @@ async def cleanup_database(context):
     deleted_count = delete_old_messages()
     print(f"[Cleanup] Deleted {deleted_count} messages older than 72 hours.")
 
+# Simple HTTP health-check endpoint for UptimeRobot
+async def health_check(request):
+    return web.Response(text="Bot is alive!", status=200)
+
+async def start_health_check_server():
+    app = web.Application()
+    app.router.add_get("/", health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
 # --- App setup -----------------------------------------------------------
 def main() -> None:
     # Initialize SQL database library
@@ -437,6 +452,12 @@ def main() -> None:
 
     # Register global error handler
     application.add_error_handler(error_handler)
+
+    # Start health check server on startup loop via post_init hook
+    async def post_init(app):
+        await start_health_check_server()
+
+    application.post_init = post_init
 
     # Polling is a mechanism in which the Telegram bot is maintained in activity from detecting updates at all times.
     logger.info("Bot starting (polling mode)...")

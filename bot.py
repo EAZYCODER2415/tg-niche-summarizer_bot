@@ -132,7 +132,6 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
 
 async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
-    buffered = db.get_messages(chat_id)
 
     # Extract thread_id if inside a supergroup topic
     thread_id = (
@@ -141,25 +140,13 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         else None
     )
 
-    # No messages buffered in database.
-    if not buffered:
-        if update.message:
-            await update.message.reply_text("No messages logged yet to summarize.")
-            return
-        else:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                message_thread_id=thread_id,
-                text="No messages logged yet to summarize."
-            )
-            return
-
     # Included parameters
-    hours = None # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
+    hours = 24.0 # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
     topic = '' # No topic as default, topic parameter in string format.
 
-    if context and context.args:
-        try:
+    try:
+        if context and context.args:
+            
             hours = float(context.args[0]) # Parameter can arrive in any format (integer or decimal)
             if (hours > 72.0 or hours <= 0.0):
                 if update.message:
@@ -176,17 +163,32 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
             if len(context.args) >= 2:
                 topic = " ".join(context.args[1:])
-        except ValueError:
-            if update.message:
-                await update.message.reply_text(
-                    "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
-                )
-            else:
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    message_thread_id=thread_id,
-                    text="Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
-                )
+    except ValueError:
+        if update.message:
+            await update.message.reply_text(
+                "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
+            )
+        else:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                message_thread_id=thread_id,
+                text="Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
+            )
+        return
+
+    buffered = db.get_messages(chat_id, thread_id)
+    
+    # No messages buffered in database.
+    if not buffered:
+        if update.message:
+            await update.message.reply_text("No messages logged yet to summarize.")
+            return
+        else:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                message_thread_id=thread_id,
+                text="No messages logged yet to summarize."
+            )
             return
 
     # This is exactly where the LLM call will slot in.

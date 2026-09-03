@@ -149,16 +149,11 @@ def get_messages(chat_id: int, thread_id:int=None, since:str=None, hours:float=N
             else:
                 latest_dt = since
 
-            prev_latest_dt = latest_dt
-            latest_dt = latest_dt.isoformat(timespec="seconds") # becomes string
-            latest_dt = latest_dt.replace("T", " ") # removes T
             thread_clause += f" AND timestamp <= {placeholder}"
             params.append(latest_dt)
             
         if hours is not None:
-            cutoff_dt = prev_latest_dt - timedelta(hours=hours) # has T and is a datetime object
-            cutoff_dt = cutoff_dt.isoformat(timespec="seconds") # becomes string
-            cutoff_dt = cutoff_dt.replace("T", " ") # removes T
+            cutoff_dt = latest_dt - timedelta(hours=hours) # has T and is a datetime object
             thread_clause += f" AND timestamp >= {placeholder}"
             params.append(cutoff_dt)
 
@@ -203,16 +198,12 @@ def count_messages(chat_id, thread_id=None, since:str=None, hours:float=None):
                 latest_dt = datetime.fromisoformat(since)
             else:
                 latest_dt = since
-            prev_latest_dt = latest_dt
-            latest_dt = latest_dt.isoformat(timespec="seconds") # becomes string
-            latest_dt = latest_dt.replace("T", " ") # removes T
+            
             query += f" AND timestamp <= {placeholder}"
             params.append(latest_dt)
             
-        if hours is not None and prev_latest_dt is not None:
-            cutoff_dt = prev_latest_dt - timedelta(hours=hours) # has T and is a datetime object
-            cutoff_dt = cutoff_dt.isoformat(timespec="seconds") # becomes string
-            cutoff_dt = cutoff_dt.replace("T", " ") # removes T
+        if hours is not None and latest_dt is not None:
+            cutoff_dt = latest_dt - timedelta(hours=hours) # has T and is a datetime object
             query += f" AND timestamp >= {placeholder}"
             params.append(cutoff_dt)
 
@@ -223,7 +214,7 @@ def count_messages(chat_id, thread_id=None, since:str=None, hours:float=None):
         # Check if result exists and access by key
         return result["total"] if result else 0
 
-def get_latest_message(chat_id: int=None, thread_id: int=None) -> str:
+def get_latest_message(chat_id: int=None, thread_id: int=None) -> datetime | None:
     """
     Retrieves the most recent message record from the database.
     Returns timestamp or None if the database is empty.
@@ -231,6 +222,7 @@ def get_latest_message(chat_id: int=None, thread_id: int=None) -> str:
     with get_connection() as conn:
         cursor = conn.cursor()
         placeholder = "%s" if DATABASE_URL else "?"
+        params = []
 
         if chat_id:
             # Build clean parameter list
@@ -246,7 +238,7 @@ def get_latest_message(chat_id: int=None, thread_id: int=None) -> str:
         if chat_id:
             query = f"SELECT timestamp FROM messages WHERE chat_id = {placeholder} {thread_clause} ORDER BY id DESC LIMIT 1"
         else:
-            query = f"SELECT timestamp FROM messages WHERE ORDER BY id DESC LIMIT 1"
+            query = f"SELECT timestamp FROM messages ORDER BY id DESC LIMIT 1"
 
         cursor.execute(query, params)
         row = cursor.fetchone()
@@ -263,10 +255,6 @@ def delete_old_messages(hours: int = 72) -> int:
         since_time = get_latest_message()
         if not since_time:
             return 0  # Database is empty
-        
-        latest_dt = datetime.fromisoformat(since_time) # has T and is a datetime object
-        latest_dt = latest_dt.isoformat(timespec="seconds") # becomes string
-        latest_dt = latest_dt.replace("T", " ") # removes T
         
         # Safely pass latest_dt as a parameter; 'timestamp' is the table column
         if DATABASE_URL:

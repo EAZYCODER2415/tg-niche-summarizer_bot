@@ -477,6 +477,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 
 async def cleanup_database(context):
     """Job callback to clean up old messages."""
+    logger.info("⏰ JobQueue trigger fired! Running cleanup_database...")
     deleted_count = delete_old_messages()
     print(f"[Cleanup] Deleted {deleted_count} messages older than 72 hours.")
 
@@ -493,6 +494,14 @@ async def start_health_check_server():
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
 
+# Start health check server on startup loop via post_init hook
+# Run cleanup every hour (3600 seconds)
+async def post_init(application: Application):
+    job_queue = application.job_queue
+    if job_queue:
+        job_queue.run_repeating(cleanup_database, interval=3600, first=10)
+    await start_health_check_server()
+
 # --- App setup -----------------------------------------------------------
 def main() -> None:
     # Initialize SQL database library
@@ -507,7 +516,7 @@ def main() -> None:
         )
 
     # Application setup of the whole bot
-    application = Application.builder().token(token).build()
+    application = Application.builder().token(token).post_init(post_init).build()
 
     # Command TREE (command handlers)
     application.add_handler(CommandHandler("start", start))
@@ -524,19 +533,9 @@ def main() -> None:
     # Register global error handler
     application.add_error_handler(error_handler)
 
-    # Start health check server on startup loop via post_init hook
-    async def post_init(app):
-        await start_health_check_server()
-
-    application.post_init = post_init
-
     # Polling is a mechanism in which the Telegram bot is maintained in activity from detecting updates at all times.
     logger.info("Bot starting (polling mode)...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-    # Run cleanup every hour (3600 seconds)
-    job_queue = application.job_queue
-    job_queue.run_repeating(cleanup_database, interval=3600, first=10)
 
 # Run the whole code
 if __name__ == "__main__":

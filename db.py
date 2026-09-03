@@ -158,7 +158,7 @@ def get_messages(chat_id: int, thread_id:int=None, since:str=None, hours:float=N
             params.append(cutoff_dt)
 
         query = f"SELECT * FROM messages WHERE chat_id = {placeholder} {thread_clause} AND text IS NOT NULL AND text != '' ORDER BY id DESC"
-        if hours is not None:
+        if hours is None:
            query += " LIMIT 50"
 
         cursor.execute(query, params)

@@ -64,6 +64,7 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
 
     # 1. Check if there are messages within the time window
     total_count = db.count_messages(chat_id=chat_id, thread_id=thread_id, since=since_time, hours=hours)
+    logger.info(f"🎰Summarize command called. Counted {total_count} messages for summarizer logging.")
     
     if total_count == 0:
         return None, None

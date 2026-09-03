@@ -51,9 +51,8 @@ COUNTER_THRESHOLD = 50
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         f"Hi! I'm your group summary bot. Add me to a chat and I'll start keeping track of the conversation.\n\n"
-        f"/summarize [time (in hrs)] [[topic (str format)]]: Summarize a conversation within given time parameter (calculated in hours) and topic parameter enclosed in square brackets ([]).\n"
-        f"REMARKS: Hours in either integers or decimals are acceptable.\n"
-        f"Topics should be a single keyword enclosed in square brackets (in the case of multiple keywords, all keywords must not have blank spaces in between).\n\n"
+        f"/summarize [time (in hrs)] [[topic (str format)]]:\nSummarize a conversation within given time parameter (calculated in hours) and topic parameter.\n"
+        f"REMARKS: Hours in either integers or decimals are acceptable.\n\n"
         f"When sending messages with attachments, add a #summarize tag to include them inside the summary data."
     )
 
@@ -176,7 +175,7 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     return
 
             if len(context.args) >= 2:
-                topic = str(context.args[1])
+                topic = " ".join(context.args[1:])
         except ValueError:
             if update.message:
                 await update.message.reply_text(
@@ -295,8 +294,6 @@ def get_attachment_info(message):
         return True, "document"
     elif message.audio:
         return True, "audio"
-    elif message.voice:
-        return True, "voice"
     elif message.video_note:
         return True, "video_note"
     '''
@@ -310,7 +307,8 @@ def begin_processing(chat_id, user, attachment_type):
 async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Buffers every text message in a group chat for later summarization."""
     # Ignore non-message updates, stickers, or messages without any text/caption content
-    if not update.message or update.message.sticker:
+    if (not update.message or update.message.sticker or update.message.voice or update.message.video_note 
+    or update.message.contact or update.message.location or update.message.venue):
         return
 
     chat_id = update.effective_chat.id

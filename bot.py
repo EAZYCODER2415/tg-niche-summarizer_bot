@@ -159,10 +159,10 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     hours = None # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
     topic = '' # No topic as default, topic parameter in string format.
 
-    if context.args:
+    if context and context.args:
         try:
             hours = float(context.args[0]) # Parameter can arrive in any format (integer or decimal)
-            if hours >= 72.0 and hours < 0.0:
+            if (hours > 72.0 or hours <= 0.0):
                 if update.message:
                     await update.message.reply_text(
                     "Invalid time range. Please input within range 0-72 hours."

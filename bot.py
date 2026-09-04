@@ -25,7 +25,7 @@ from summarizer import summarizeLLMtool, checkForTopic
 import asyncio
 
 # Convert local path of images to Base64 URIs
-from imgStorage import safe_upload_image, encode_image_to_base64
+from imgStorage import safe_upload_image
 
 # Setup Telegram API libraries
 from telegram import Update

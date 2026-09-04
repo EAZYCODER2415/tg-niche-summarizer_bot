@@ -87,10 +87,7 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
         if text_content:
             message = f"{timestamp} | {user_name}: {text_content}"
             if has_attachment and local_path:
-                # Convert local path to Base64 URI before processing
-                if os.path.exists(local_path):
-                    base64_image = encode_image_to_base64(local_path)
-                image_data = base64_image
+                image_data = local_path
             else:
                 image_data = None
 
@@ -106,8 +103,8 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
                 prompt_lines.append(message)
 
                 # Capture the latest image/attachment if tagged/present
-                if has_attachment and local_path:
-                    image_url_lines.append(base64_image)
+                if has_attachment and image_data:
+                    image_url_lines.append(image_data)
 
     # Show status if a topic is added into the parameters
     if topic:
@@ -144,9 +141,19 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     hours = 24.0 # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
     topic = '' # No topic as default, topic parameter in string format.
 
-    try:
-        if context and context.args:
-            
+    # 1. Require parameters: Check if context.args is empty
+    if context and context.args is not None:
+        # User input summarize command without parameters
+        if len(context.args) == 0:
+            missing_param_msg = "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
+            if update and update.message:
+                await update.message.reply_text(missing_param_msg)
+            else:
+                await context.bot.send_message(chat_id=chat_id, message_thread_id=thread_id, text=missing_param_msg)
+                return
+
+        # User input summarize command without parameters
+        try:
             hours = float(context.args[0]) # Parameter can arrive in any format (integer or decimal)
             if (hours > 72.0 or hours <= 0.0):
                 if update.message:
@@ -163,18 +170,18 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
             if len(context.args) >= 2:
                 topic = " ".join(context.args[1:])
-    except ValueError:
-        if update.message:
-            await update.message.reply_text(
-                "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
-            )
-        else:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                message_thread_id=thread_id,
-                text="Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
-            )
-        return
+        except ValueError:
+            if update.message:
+                await update.message.reply_text(
+                    "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    message_thread_id=thread_id,
+                    text="Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
+                )
+            return
 
     buffered = db.get_messages(chat_id, thread_id)
     
@@ -464,7 +471,8 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 f"Triggering automatic summary..."
             )
             context.bot_data["chat_counters"][counter_key] = 0  # Reset for this specific chat
-            
+
+            context.args = None  # Signals that this is an automated run, NOT a user command
             # Non-blocking async task so log_message finishes immediately
             asyncio.create_task(summarize(update, context))
 

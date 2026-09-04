@@ -58,7 +58,8 @@ def init_db():
                     local_path TEXT,
                     mime_type TEXT,
                     file_size BIGINT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_summarized BOOLEAN DEFAULT FALSE
                 )
                 """
             )
@@ -80,7 +81,8 @@ def init_db():
                     local_path TEXT,
                     mime_type TEXT,
                     file_size INTEGER,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    is_summarized BOOLEAN DEFAULT FALSE
                 )
                 """
             )
@@ -100,7 +102,8 @@ def log_message(
         local_path=None,
         mime_type=None,
         file_size=None,
-        timestamp=None
+        timestamp=None,
+        is_summarized=False
 ):
     """Log a message, including attachment flags and attachment type."""
     att_flag = bool(has_attachment)
@@ -108,7 +111,7 @@ def log_message(
     # 1. Define column list
     cols = ["chat_id", "chat_type", "thread_id", "chat_title", "user" if not DATABASE_URL else '"user"',
             "text", "has_attachment", "attachment_type", "file_id", "file_name", 
-            "local_path", "mime_type", "file_size", "timestamp"]
+            "local_path", "mime_type", "file_size", "timestamp", "is_summarized"]
     
     # 2. Pick placeholder style dynamically
     placeholder = "%s" if DATABASE_URL else "?"
@@ -120,7 +123,7 @@ def log_message(
     params = (
         chat_id, chat_type, thread_id, chat_title, user, text,
         att_flag, attachment_type, file_id, file_name,
-        local_path, mime_type, file_size, timestamp
+        local_path, mime_type, file_size, timestamp, False
     )
 
     with get_connection() as conn:
@@ -157,9 +160,11 @@ def get_messages(chat_id: int, thread_id:int=None, since:str=None, hours:float=N
             thread_clause += f" AND timestamp >= {placeholder}"
             params.append(cutoff_dt)
 
+        thread_clause += f" AND (is_summarized IS NULL OR is_summarized = FALSE)"
+        params.append(False)
+
         query = f"SELECT * FROM messages WHERE chat_id = {placeholder} {thread_clause} AND text IS NOT NULL AND text != '' ORDER BY id DESC"
-        if hours is None:
-           query += " LIMIT 50"
+        query += f" LIMIT 200"
 
         cursor.execute(query, params)
         return cursor.fetchall()
@@ -274,4 +279,27 @@ def delete_old_messages(hours: int = 72) -> int:
         deleted_count = cursor.rowcount
         conn.commit()
         return deleted_count
+
+def mark_as_summarized(message_ids: list[int]) -> int:
+    """
+    Marks messages as summarized given a list of message IDs.
+    Returns the count of updated rows.
+    """
+    if not message_ids:
+        return 0
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        
+        # Generates '%s, %s, ...' for Postgres or '?, ?, ...' for SQLite
+        placeholder = "%s" if DATABASE_URL else "?"
+        placeholders = ", ".join([placeholder] * len(message_ids))
+        
+        query = f"UPDATE messages SET is_summarized = TRUE WHERE id IN ({placeholders})"
+        cursor.execute(query, message_ids)
+        
+        updated_count = cursor.rowcount
+        conn.commit()
+        
+        return updated_count
 

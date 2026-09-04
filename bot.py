@@ -106,17 +106,24 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
                 if has_attachment and image_data:
                     image_url_lines.append(image_data)
 
+    # Extract the database IDs from the retrieved message buffer
+    processed_ids = [msg['id'] for msg in messages if 'id' in msg]
+
+    # Mark them as summarized in Neon Postgres
+    if processed_ids:
+        db.mark_as_summarized(processed_ids)
+
     # Show status if a topic is added into the parameters
     if topic:
         print(f"Retrieved {len(prompt_lines)} that match topic of '{topic}'!")
     
-    # Truncate database messages to be within 100 messages.
-    MAX_MESSAGES = 100
+    # Truncate database messages to be within max messages limit.
+    MAX_MESSAGES = 200
     if len(prompt_lines) > MAX_MESSAGES:
-        messages = messages[-MAX_MESSAGES:]  # Keep the 100 most recent messages
+        prompt_lines = prompt_lines[-MAX_MESSAGES:]
 
-    if len(image_url_lines) > MAX_MESSAGES:
-        messages = messages[-MAX_MESSAGES:]  # Keep the 100 most recent images
+    if len(prompt_lines) > MAX_MESSAGES:
+        prompt_lines = prompt_lines[-MAX_MESSAGES:]
 
     prompt = "\n".join(prompt_lines)
 

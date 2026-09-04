@@ -159,67 +159,47 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 await context.bot.send_message(chat_id=chat_id, message_thread_id=thread_id, text=missing_param_msg)
                 return
 
+        # Processing message sent, waiting for summary processing completion to edit its own message.
+        if update and update.message:
+            status_msg = await update.message.reply_text("⏳ Processing...")
+        else:
+            status_msg = await context.bot.send_message(
+                chat_id=chat_id,
+                message_thread_id=thread_id,
+                text="⏳ Processing..."
+            )
+
         # User input summarize command without parameters
         try:
             hours = float(context.args[0]) # Parameter can arrive in any format (integer or decimal)
             if (hours > 72.0 or hours <= 0.0):
-                if update.message:
-                    await update.message.reply_text(
-                    "Invalid time range. Please input within range 0-72 hours."
-                    )
-                    return
-                else:
-                    await context.bot.send_message(
-                        chat_id=chat_id,
-                        message_thread_id=thread_id,
-                        text="Invalid time range. Please input within range 0-72 hours.")
-                    return
+                await status_msg.edit_text(
+                "Invalid time range. Please input within range 0-72 hours."
+                )
+                return
 
             if len(context.args) >= 2:
                 topic = " ".join(context.args[1:])
         except ValueError:
-            if update.message:
-                await update.message.reply_text(
-                    "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
-                )
-            else:
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    message_thread_id=thread_id,
-                    text="Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
-                )
+            await status_msg.edit_text(
+                "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
+            )
             return
 
     buffered = db.get_messages(chat_id, thread_id)
     
     # No messages buffered in database.
     if not buffered:
-        if update.message:
-            await update.message.reply_text("No messages logged yet to summarize.")
-            return
-        else:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                message_thread_id=thread_id,
-                text="No messages logged yet to summarize."
-            )
-            return
+        await status_msg.edit_text("No messages logged yet to summarize.")
+        return
 
     # This is exactly where the LLM call will slot in.
     prompt, image_url = create_messageThread(chat_id, hours, thread_id, topic)
 
     # Check for valid prompt return
     if not prompt:
-        if update.message:
-            await update.message.reply_text("⚠️ No relevant messages found for this topic.")
-            return
-        else:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                message_thread_id=thread_id,
-                text="⚠️ No relevant messages found for this topic."
-            )
-            return
+        await status_msg.edit_text("⚠️ No relevant messages found for this topic.")
+        return
     
     # Initialize summary
     summary = None
@@ -237,66 +217,41 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 timeout=30.0
             )
         else:
-            if update.message:
-                await update.message.reply_text("⚠️ Failed to generate summary. Cannot fetch data.")
-            else:
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    message_thread_id=thread_id,
-                    text="⚠️ Failed to generate summary. Cannot fetch data."
-                )
+            await status_msg.edit_text("⚠️ Failed to generate summary. Cannot fetch data.")
+
         if not summary:
-            if update.message:
-                await update.message.reply_text("⚠️ Failed to generate summary.")
-            else:
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    message_thread_id=thread_id,
-                    text="⚠️ Failed to generate summary"
-                )
+            await status_msg.edit_text("⚠️ Failed to generate summary.")
+            
         else:
-            # Helper to chunk long text to safe limits (4000 chars)
-            MAX_LEN = 4000
-            if len(summary) >= MAX_LEN:
-                for i in range(0, len(summary), MAX_LEN):
-                    if update.message:
-                        await update.message.reply_text(summary[i : i + MAX_LEN])
-                    else:
-                        await context.bot.send_message(
-                            chat_id=chat_id,
-                            message_thread_id=thread_id,
-                            text=summary[i : i + MAX_LEN]
-                        )
-            else:
-                for i in range(0, len(summary), MAX_LEN):
-                    if update.message:
-                        await update.message.reply_text(summary[i : i + MAX_LEN])
-                    else:
-                        await context.bot.send_message(
-                            chat_id=chat_id,
-                            message_thread_id=thread_id,
-                            text=summary[i : i + MAX_LEN]
-                        )
+            await status_msg.edit_text(summary)
+            # # Helper to chunk long text to safe limits (4000 chars)
+            # MAX_LEN = 4000
+            # if len(summary) >= MAX_LEN:
+            #     for i in range(0, len(summary), MAX_LEN):
+            #         if update.message:
+            #             await update.message.reply_text(summary[i : i + MAX_LEN])
+            #         else:
+            #             await context.bot.send_message(
+            #                 chat_id=chat_id,
+            #                 message_thread_id=thread_id,
+            #                 text=summary[i : i + MAX_LEN]
+            #             )
+            # else:
+            #     for i in range(0, len(summary), MAX_LEN):
+            #         if update.message:
+            #             await update.message.reply_text(summary[i : i + MAX_LEN])
+            #         else:
+            #             await context.bot.send_message(
+            #                 chat_id=chat_id,
+            #                 message_thread_id=thread_id,
+            #                 text=summary[i : i + MAX_LEN]
+            #             )
     except asyncio.TimeoutError:
         # This triggers if summarizeLLMtool takes longer than 30 seconds
-        if update.message:
-            await update.message.reply_text("⏱️ Error: The request took longer than 30 seconds to complete. Please try again.")
-        else:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                message_thread_id=thread_id,
-                text="⏱️ Error: The request took longer than 30 seconds to complete. Please try again."
-            )
+        await status_msg.edit_text("⏱️ Error: The request took longer than 30 seconds to complete. Please try again.")
 
     except Exception as e:
-        if update.message:
-            await update.message.reply_text(f"⚠️ An unexpected error occurred: {e}")
-        else:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                message_thread_id=thread_id,
-                text=f"⚠️ An unexpected error occurred: {e}"
-            )
+        await status_msg.edit_text(f"⚠️ An unexpected error occurred: {e}")
 
 
 def get_attachment_info(message):

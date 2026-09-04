@@ -161,10 +161,8 @@ def get_messages(chat_id: int, thread_id:int=None, since:str=None, hours:float=N
             params.append(cutoff_dt)
 
         thread_clause += f" AND (is_summarized IS NULL OR is_summarized = FALSE)"
-        params.append(False)
 
-        query = f"SELECT * FROM messages WHERE chat_id = {placeholder} {thread_clause} AND text IS NOT NULL AND text != '' ORDER BY id DESC"
-        query += f" LIMIT 200"
+        query = f"SELECT * FROM messages WHERE chat_id = {placeholder} {thread_clause} AND text IS NOT NULL AND text != '' ORDER BY id ASC LIMIT 200"
 
         cursor.execute(query, params)
         return cursor.fetchall()

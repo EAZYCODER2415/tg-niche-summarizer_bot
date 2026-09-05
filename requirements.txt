@@ -1,2 +1,8 @@
 python-telegram-bot>=20.0
 mysql-connector-python>=8.0
+python-telegram-bot
+openai
+boto3
+psycopg
+aiohttp
+python-telegram-bot[job-queue]>=20.0

@@ -1,5 +1,5 @@
 """
-Telegram Summary Bot — Skeleton Ver.
+Telegram Summary Bot
 ----------------------------------------
 Connection to Telegram, listens to event triggers from commands, computes messages and evaluates summary with LLM AI.
 
@@ -12,8 +12,20 @@ Required Setup for each run:
 import logging
 import os
 
+# HTTP Health Check Endpoint
+import aiohttp
+from aiohttp import web
+
 import db
-from db import init_db
+from db import init_db, delete_old_messages
+
+from summarizer import summarizeLLMtool, checkForTopic
+
+# Timeout check
+import asyncio
+
+# Convert local path of images to Base64 URIs
+from imgStorage import safe_upload_image
 
 # Setup Telegram API libraries
 from telegram import Update
@@ -32,49 +44,215 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Variables for Activity-Based Trigger
+COUNTER_THRESHOLD = 50
 
 # --- Handlers ----------------------------------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        f'''Hi! I'm your group summary bot. Add me to a chat and I'll start keeping track of the conversation.
-
-        /summarize [time (in hrs)] [topic (str format)]: Summarize a conversation within given time parameter (calculated in hours) and topic parameter enclosed in quotation marks
-
-        When sending messages with attachments, add a #summarize tag to include them inside the summary data.'''
+        f"Hi! I'm your group summary bot. Add me to a chat and I'll start keeping track of the conversation.\n\n"
+        f"/summarize [time (in hrs)] [[topic (str format)]]:\nSummarize a conversation within given time parameter (calculated in hours) and topic parameter.\n"
+        f"REMARKS: Hours in either integers or decimals are acceptable.\n\n"
+        f"When sending messages with attachments, add a #summarize tag to include them inside the summary data."
     )
 
+def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=None):
+    print(f"DEBUG: querying chat_id={chat_id}, thread_id={thread_id}")
+    # Calculate the timestamp threshold based on the 'hours' lookback parameter
+    since_time = db.get_latest_message(chat_id=chat_id, thread_id=thread_id)
+
+    # 1. Check if there are messages within the time window
+    total_count = db.count_messages(chat_id=chat_id, thread_id=thread_id, since=since_time, hours=hours)
+    logger.info(f"🎰Summarize command called. Counted {total_count} messages for summarizer logging.")
+    
+    if total_count == 0:
+        return None, None
+
+    # 2. Retrieve messages from database
+    messages = db.get_messages(chat_id=chat_id, thread_id=thread_id, since=since_time, hours=hours)
+
+    prompt_lines = []
+    image_url_lines = []
+
+    # 3. Format messages into a single prompt string for LLM
+    for msg in messages:
+        # Standardize record extraction based on db.py schema
+        # Assuming schema: (id, chat_id, chat_type, thread_id, chat_title, user, text, has_attachment, attachment_type, file_id, file_name, local_path, mime_type, file_size, timestamp)
+        user_name = msg["user"]
+        text_content = msg["text"]
+        has_attachment = msg["has_attachment"]
+        local_path = msg["local_path"]  # or public URL/file_id depending on storage
+        timestamp = msg["timestamp"]
+
+        if text_content:
+            message = f"{timestamp} | {user_name}: {text_content}"
+            if has_attachment and local_path:
+                image_data = local_path
+            else:
+                image_data = None
+
+            if topic:
+                if image_data:
+                    thereIsTopic = checkForTopic(message, topic, image_data)
+                else:
+                    thereIsTopic = checkForTopic(message, topic)
+            else:
+                thereIsTopic = 0
+
+            if not topic or thereIsTopic:
+                prompt_lines.append(message)
+
+                # Capture the latest image/attachment if tagged/present
+                if has_attachment and image_data:
+                    image_url_lines.append(image_data)
+
+    # Extract the database IDs from the retrieved message buffer
+    processed_ids = [msg['id'] for msg in messages if 'id' in msg]
+
+    # Mark them as summarized in Neon Postgres
+    if processed_ids:
+        db.mark_as_summarized(processed_ids)
+
+    # Show status if a topic is added into the parameters
+    if topic:
+        print(f"Retrieved {len(prompt_lines)} that match topic of '{topic}'!")
+    
+    # Truncate database messages to be within max messages limit.
+    MAX_MESSAGES = 200
+    if len(prompt_lines) > MAX_MESSAGES:
+        prompt_lines = prompt_lines[-MAX_MESSAGES:]
+
+    if len(prompt_lines) > MAX_MESSAGES:
+        prompt_lines = prompt_lines[-MAX_MESSAGES:]
+
+    prompt = "\n".join(prompt_lines)
+
+    if len(image_url_lines) != 0:
+        image_url = "\n".join(image_url_lines)
+    else:
+        image_url = None
+    
+    return prompt, image_url
 
 async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
-    buffered = db.get_messages(chat_id)
-    # No messages buffered in database.
-    if not buffered:
-        await update.message.reply_text("No messages logged yet to summarize.")
-        return
+
+    # Extract thread_id if inside a supergroup topic
+    thread_id = (
+        update.effective_message.message_thread_id
+        if update.effective_chat.type == "supergroup"
+        else None
+    )
 
     # Included parameters
-    hours = 24 # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
+    hours = 24.0 # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
     topic = '' # No topic as default, topic parameter in string format.
-    if context.args:
+
+    # 1. Require parameters: Check if context.args is empty
+    if context and context.args is not None:
+        # User input summarize command without parameters
+        if len(context.args) == 0:
+            missing_param_msg = "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
+            if update and update.message:
+                await update.message.reply_text(missing_param_msg)
+            else:
+                await context.bot.send_message(chat_id=chat_id, message_thread_id=thread_id, text=missing_param_msg)
+                return
+
+        # User input summarize command without parameters
         try:
-            hours = int(context.args[0]) # Parameter can arrive in int format
-            if len(context.args) == 2:
-                topic = str(context.args[0]) # Parameter can arrive in int format
+            hours = float(context.args[0]) # Parameter can arrive in any format (integer or decimal)
+            if (hours > 72.0 or hours <= 0.0):
+                await status_msg.edit_text(
+                "Invalid time range. Please input within range 0-72 hours."
+                )
+                return
+
+            if len(context.args) >= 2:
+                topic = " ".join(context.args[1:])
         except ValueError:
-            await update.message.reply_text(
-                "Invalid parameters. Usage: /summarize [numerical hours] '[topic (optional)]'"
+            await status_msg.edit_text(
+                "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
             )
             return
 
-    # Placeholder — this is exactly where the LLM call will slot in.
-    # e.g. summary = await call_llm_summarizer(buffered)
-    await update.message.reply_text(
-        f"[Placeholder] I've summarized {len(buffered)} messages since last {hours}"
-        f"hours. sike LLM summarization isn't connected yet."
-    )
+    # Processing message sent, waiting for summary processing completion to edit its own message.
+    if update and update.message:
+        status_msg = await update.message.reply_text("⏳ Processing...")
+    else:
+        status_msg = await context.bot.send_message(
+            chat_id=chat_id,
+            message_thread_id=thread_id,
+            text="⏳ Processing..."
+        )
 
-    # Once summarization is live, you'd typically clear the buffer here:
-    # message_buffer[chat_id] = []
+    buffered = db.get_messages(chat_id, thread_id)
+    
+    # No messages buffered in database.
+    if not buffered:
+        await status_msg.edit_text("No messages logged yet to summarize.")
+        return
+
+    # This is exactly where the LLM call will slot in.
+    prompt, image_url = create_messageThread(chat_id, hours, thread_id, topic)
+
+    # Check for valid prompt return
+    if not prompt:
+        await status_msg.edit_text("⚠️ No relevant messages found for this topic.")
+        return
+    
+    # Initialize summary
+    summary = None
+
+    # Run summarizeLLMtool function while keeping a 30-second time limit to prevent lagging
+    try:
+        if prompt and image_url:
+            summary = await asyncio.wait_for(
+                asyncio.to_thread(summarizeLLMtool, prompt, image_url), 
+                timeout=30.0
+            )
+        elif prompt:
+            summary = await asyncio.wait_for(
+                asyncio.to_thread(summarizeLLMtool, prompt), 
+                timeout=30.0
+            )
+        else:
+            await status_msg.edit_text("⚠️ Failed to generate summary. Cannot fetch data.")
+
+        if not summary:
+            await status_msg.edit_text("⚠️ Failed to generate summary.")
+            
+        else:
+            await status_msg.edit_text(summary)
+            # # Helper to chunk long text to safe limits (4000 chars)
+            # MAX_LEN = 4000
+            # if len(summary) >= MAX_LEN:
+            #     for i in range(0, len(summary), MAX_LEN):
+            #         if update.message:
+            #             await update.message.reply_text(summary[i : i + MAX_LEN])
+            #         else:
+            #             await context.bot.send_message(
+            #                 chat_id=chat_id,
+            #                 message_thread_id=thread_id,
+            #                 text=summary[i : i + MAX_LEN]
+            #             )
+            # else:
+            #     for i in range(0, len(summary), MAX_LEN):
+            #         if update.message:
+            #             await update.message.reply_text(summary[i : i + MAX_LEN])
+            #         else:
+            #             await context.bot.send_message(
+            #                 chat_id=chat_id,
+            #                 message_thread_id=thread_id,
+            #                 text=summary[i : i + MAX_LEN]
+            #             )
+    except asyncio.TimeoutError:
+        # This triggers if summarizeLLMtool takes longer than 30 seconds
+        await status_msg.edit_text("⏱️ Error: The request took longer than 30 seconds to complete. Please try again.")
+
+    except Exception as e:
+        await status_msg.edit_text(f"⚠️ An unexpected error occurred: {e}")
+
 
 def get_attachment_info(message):
     """Detects if a message has any attachment and returns (has_attachment, attachment_type)."""
@@ -87,12 +265,8 @@ def get_attachment_info(message):
         return True, "document"
     elif message.audio:
         return True, "audio"
-    elif message.voice:
-        return True, "voice"
     elif message.video_note:
         return True, "video_note"
-    elif message.sticker:
-        return True, "sticker"
     '''
     return False, None
 
@@ -103,14 +277,23 @@ def begin_processing(chat_id, user, attachment_type):
 
 async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Buffers every text message in a group chat for later summarization."""
-    if not update.message:
-        return  # Ignore non-text messages
+    # Ignore non-message updates, stickers, or messages without any text/caption content
+    if (not update.message or update.message.sticker or update.message.voice or update.message.video_note 
+    or update.message.contact or update.message.location or update.message.venue):
+        return
 
     chat_id = update.effective_chat.id
     chat_type = update.effective_chat.type
     chat_title = update.effective_chat.title or "Private Chat"
     user = update.message.from_user.username or update.message.from_user.first_name
     timestamp = update.message.date.strftime("%Y-%m-%d %H:%M:%S")
+
+    # Extract thread_id if inside a supergroup topic
+    thread_id = (
+        update.effective_message.message_thread_id
+        if update.effective_chat.type == "supergroup"
+        else None
+    )
 
     # Detect any attachment type
     has_attachment, attachment_type = get_attachment_info(update.message)
@@ -127,26 +310,30 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     file_size = None
 
     # IF message has ANY attachment AND text/caption is "#summarize":
-    if has_attachment and "#summarize" in text.lower():
+    if has_attachment and ("#summarize" in text.lower()):
         if attachment_type == "image":
             begin_processing(chat_id, user, attachment_type)
-            photo = update.message.photo[-1]  # Highest resolution variant
+
+            # Get the highest resolution photo version
+            photo = update.message.photo[-1]
             file_id = photo.file_id
             file_size = photo.file_size
             mime_type = "image/jpeg"
             attachment_type = "photo"
 
+            # Download file bytes directly into memory (no local disk save)
+            telegram_file = await context.bot.get_file(file_id)
+            file_bytes = await telegram_file.download_as_bytearray()
+
             # Generate a fallback filename since photos don't carry original file names
             file_name = f"photo_{file_id[:10]}.jpg"
 
-            # Limit downloads to standard Bot API cap (20 MB)
-            if file_size <= 20 * 1024 * 1024:
-                os.makedirs("downloads", exist_ok=True)
-                local_path = f"downloads/{file_id}.jpg"
-                
-                # Fetch file object and download raw image bytes to disk
-                telegram_file = await context.bot.get_file(file_id)
-                await telegram_file.download_to_drive(custom_path=local_path)
+            try:
+                # Safe upload to R2 (handles 10 MB cap & 8 GB storage check)
+                local_path = safe_upload_image(bytes(file_bytes), file_name, content_type="image/jpeg")
+            except Exception as e:
+                print(f"Error uploading image to R2: {e}")
+                local_path = None
 
     try:
         if has_attachment and "#summarize" in text.lower():
@@ -154,6 +341,7 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 db.log_message(
                     chat_id=chat_id,
                     chat_type=chat_type,
+                    thread_id=thread_id,
                     chat_title=chat_title,
                     user=user,
                     text=text,
@@ -170,6 +358,7 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 db.log_message(
                     chat_id=chat_id,
                     chat_type=chat_type,
+                    thread_id=thread_id,
                     chat_title="Private Chat",
                     user=user,
                     text=text,
@@ -187,10 +376,11 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 db.log_message(
                     chat_id=chat_id,
                     chat_type=chat_type,
+                    thread_id=thread_id,
                     chat_title=chat_title,
                     user=user,
                     text=text,
-                    has_attachment=0,
+                    has_attachment=False,
                     attachment_type=None,
                     file_id=None,
                     file_name=None,
@@ -203,10 +393,11 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 db.log_message(
                     chat_id=chat_id,
                     chat_type=chat_type,
+                    thread_id=thread_id,
                     chat_title="Private Chat",
                     user=user,
                     text=text,
-                    has_attachment=0,
+                    has_attachment=False,
                     attachment_type=None,
                     file_id=None,
                     file_name=None,
@@ -216,6 +407,37 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     timestamp=timestamp
                 )
             logger.info(f"Logged message from {user} in chat {chat_id}")
+
+        # ACTIVITY-BASED TRIGGER SECTION HERE
+
+        # Initialize bot_data dict if not present
+        if "chat_counters" not in context.bot_data:
+            context.bot_data["chat_counters"] = {}
+
+        # Initialize composite key: (chat_id, chat_type, thread_id)
+        counter_key = (chat_id, chat_type, thread_id)
+        
+        # Increment counter for this specific composite key
+        current_count = context.bot_data["chat_counters"].get(counter_key, 0) + 1
+        context.bot_data["chat_counters"][counter_key] = current_count
+
+        logger.info(
+            f"Logged message {current_count}/{COUNTER_THRESHOLD} "
+            f"for chat {chat_id} ({chat_type}, thread: {thread_id})"
+        )
+
+        # Check threshold for this chat
+        if current_count >= COUNTER_THRESHOLD:
+            logger.info(
+                f"Activity threshold reached (50 msgs) for key {counter_key}. "
+                f"Triggering automatic summary..."
+            )
+            context.bot_data["chat_counters"][counter_key] = 0  # Reset for this specific chat
+
+            context.args = None  # Signals that this is an automated run, NOT a user command
+            # Non-blocking async task so log_message finishes immediately
+            asyncio.create_task(summarize(update, context))
+
     except Exception as e:
         logger.error(f"Failed to log message: {e}")
 
@@ -223,6 +445,33 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     """Log errors caused by updates."""
     logger.error("Exception while handling an update:", exc_info=context.error)
+
+async def cleanup_database(context):
+    """Job callback to clean up old messages."""
+    logger.info("⏰ JobQueue trigger fired! Running cleanup_database...")
+    deleted_count = delete_old_messages()
+    print(f"[Cleanup] Deleted {deleted_count} messages older than 72 hours.")
+
+# Simple HTTP health-check endpoint for UptimeRobot
+async def health_check(request):
+    return web.Response(text="Bot is alive!", status=200)
+
+async def start_health_check_server():
+    app = web.Application()
+    app.router.add_get("/", health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
+# Start health check server on startup loop via post_init hook
+# Run cleanup every hour (3600 seconds)
+async def post_init(application: Application):
+    job_queue = application.job_queue
+    if job_queue:
+        job_queue.run_repeating(cleanup_database, interval=3600, first=10)
+    await start_health_check_server()
 
 # --- App setup -----------------------------------------------------------
 def main() -> None:
@@ -238,7 +487,7 @@ def main() -> None:
         )
 
     # Application setup of the whole bot
-    application = Application.builder().token(token).build()
+    application = Application.builder().token(token).post_init(post_init).build()
 
     # Command TREE (command handlers)
     application.add_handler(CommandHandler("start", start))

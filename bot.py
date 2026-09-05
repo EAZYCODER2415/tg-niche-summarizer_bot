@@ -159,16 +159,6 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 await context.bot.send_message(chat_id=chat_id, message_thread_id=thread_id, text=missing_param_msg)
                 return
 
-        # Processing message sent, waiting for summary processing completion to edit its own message.
-        if update and update.message:
-            status_msg = await update.message.reply_text("⏳ Processing...")
-        else:
-            status_msg = await context.bot.send_message(
-                chat_id=chat_id,
-                message_thread_id=thread_id,
-                text="⏳ Processing..."
-            )
-
         # User input summarize command without parameters
         try:
             hours = float(context.args[0]) # Parameter can arrive in any format (integer or decimal)
@@ -185,6 +175,16 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
             )
             return
+
+    # Processing message sent, waiting for summary processing completion to edit its own message.
+    if update and update.message:
+        status_msg = await update.message.reply_text("⏳ Processing...")
+    else:
+        status_msg = await context.bot.send_message(
+            chat_id=chat_id,
+            message_thread_id=thread_id,
+            text="⏳ Processing..."
+        )
 
     buffered = db.get_messages(chat_id, thread_id)
     

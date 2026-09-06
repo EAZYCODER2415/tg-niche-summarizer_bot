@@ -116,14 +116,6 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
     # Show status if a topic is added into the parameters
     if topic:
         print(f"Retrieved {len(prompt_lines)} that match topic of '{topic}'!")
-    
-    # Truncate database messages to be within max messages limit.
-    MAX_MESSAGES = 200
-    if len(prompt_lines) > MAX_MESSAGES:
-        prompt_lines = prompt_lines[-MAX_MESSAGES:]
-
-    if len(prompt_lines) > MAX_MESSAGES:
-        prompt_lines = prompt_lines[-MAX_MESSAGES:]
 
     prompt = "\n".join(prompt_lines)
 

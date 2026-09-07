@@ -45,7 +45,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Variables for Activity-Based Trigger
-COUNTER_THRESHOLD = 50
+COUNTER_THRESHOLD = 200
 
 # --- Handlers ----------------------------------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -421,7 +421,7 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         # Check threshold for this chat
         if current_count >= COUNTER_THRESHOLD:
             logger.info(
-                f"Activity threshold reached (50 msgs) for key {counter_key}. "
+                f"Activity threshold reached (200 msgs) for key {counter_key}. "
                 f"Triggering automatic summary..."
             )
             context.bot_data["chat_counters"][counter_key] = 0  # Reset for this specific chat

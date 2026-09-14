@@ -65,4 +65,9 @@ def safe_upload_image(file_bytes: bytes, object_name: str, content_type: str = "
         Body=file_bytes,
         ContentType=content_type
     )
-    return f"https://pub-{os.getenv('R2_ACCOUNT_ID')}.r2.dev/{object_name}"
+
+    public_domain = os.getenv("R2_PUBLIC_DOMAIN")
+    if public_domain:
+        return f"{public_domain}/{object_name}"
+    else:
+        return f"https://pub-{os.getenv('R2_ACCOUNT_ID')}.r2.dev/{object_name}"

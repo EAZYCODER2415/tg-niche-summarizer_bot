@@ -142,7 +142,7 @@ def checkForTopic(message: str, topic: str, image_url: str = None) -> bool:
 
         except Exception as e:
             print(f"Unexpected error: {e}")
-            return f"⚠️ Error running LLM: {str(e)}"
+            return f"⚠️ Summary unavailable: {str(e)}"
 
 '''
 1. Get SQL database

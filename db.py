@@ -13,16 +13,26 @@ from datetime import datetime, timedelta
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 DATABASE_URL = os.getenv("DATABASE_URL_POOLED") or os.getenv("DATABASE_URL")
 
+pool = None
+if DATABASE_URL:
+    pool = ConnectionPool(
+        conninfo=DATABASE_URL,
+        min_size=1,
+        max_size=10,
+        kwargs={"row_factory": dict_row},
+        open=True
+    )
+
 def get_connection():
-    """Returns a Neon PostgreSQL connection if DATABASE_URL is present, else SQLite."""
-    if DATABASE_URL:
-        # Neon PostgreSQL connection
-        return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+    """Returns a connection from the Neon PostgreSQL pool if available, else SQLite."""
+    if pool:
+        return pool.connection()
     else:
-        # Local SQLite fallback for offline development
+        # Local SQLite fallback
         conn = sqlite3.connect("messages.db")
         conn.row_factory = sqlite3.Row
         return conn

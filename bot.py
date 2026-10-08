@@ -73,7 +73,7 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
     messages = db.get_messages(chat_id=chat_id, thread_id=thread_id, since=since_time, hours=hours)
 
     prompt_lines = []
-    image_url_lines = []
+    file_url_lines = []
 
     # 3. Format messages into a single prompt string for LLM
     for msg in messages:
@@ -82,19 +82,20 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
         user_name = msg["user"]
         text_content = msg["text"]
         has_attachment = msg["has_attachment"]
+        file_name = msg["file_name"]
         local_path = msg["local_path"]  # or public URL/file_id depending on storage
         timestamp = msg["timestamp"]
 
         if text_content:
             message = f"{timestamp} | {user_name}: {text_content}"
-            if has_attachment and local_path:
-                image_data = local_path
+            if has_attachment and (local_path or file_name):
+                file_data = local_path or file_name
             else:
-                image_data = None
+                file_data = None
 
             if topic:
-                if image_data:
-                    thereIsTopic = checkForTopic(message, topic, image_data)
+                if file_data:
+                    thereIsTopic = checkForTopic(message, topic, file_data)
                 else:
                     thereIsTopic = checkForTopic(message, topic)
             else:
@@ -104,8 +105,8 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
                 prompt_lines.append(message)
 
                 # Capture the latest image/attachment if tagged/present
-                if has_attachment and image_data:
-                    image_url_lines.append(image_data)
+                if has_attachment and file_data:
+                    file_url_lines.append(file_data)
 
     # Extract the database IDs from the retrieved message buffer
     processed_ids = [msg['id'] for msg in messages if 'id' in msg]
@@ -120,12 +121,12 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
 
     prompt = "\n".join(prompt_lines)
 
-    if len(image_url_lines) != 0:
-        image_url = "\n".join(image_url_lines)
+    if len(file_url_lines) != 0:
+        file_url = "\n".join(file_url_lines)
     else:
-        image_url = None
+        file_url = None
     
-    return prompt, image_url
+    return prompt, file_url
 
 async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
@@ -251,7 +252,6 @@ def get_attachment_info(message):
     """Detects if a message has any attachment and returns (has_attachment, attachment_type)."""
     if message.photo:
         return True, "image"
-    '''
     elif message.video:
         return True, "video"
     elif message.document:
@@ -260,7 +260,6 @@ def get_attachment_info(message):
         return True, "audio"
     elif message.video_note:
         return True, "video_note"
-    '''
     return False, None
 
 def begin_processing(chat_id, user, attachment_type):
@@ -304,9 +303,8 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     # IF message has ANY attachment AND text/caption is "#summarize":
     if has_attachment and ("#summarize" in text.lower()):
+        begin_processing(chat_id, user, attachment_type)
         if attachment_type == "image":
-            begin_processing(chat_id, user, attachment_type)
-
             # Get the highest resolution photo version
             photo = update.message.photo[-1]
             file_id = photo.file_id
@@ -327,6 +325,25 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             except Exception as e:
                 print(f"Error uploading image to R2: {e}")
                 local_path = None
+        else:
+            # Get filename, the rest set to NULL
+            # 1. Fetch file name dynamically based on attachment type
+            if update.message.document:
+                file_name = update.message.document.file_name
+            elif update.message.video:
+                file_name = getattr(update.message.video, "file_name", f"video_{update.message.video.file_id[:10]}.mp4")
+            elif update.message.audio:
+                file_name = getattr(update.message.audio, "file_name", f"audio_{update.message.audio.file_id[:10]}.mp3")
+            elif update.message.video_note:
+                file_name = f"voice_{update.message.voice.file_id[:10]}.mp4"
+            else:
+                file_name = "attachment"
+            
+            file_id = None
+            local_path = None
+            mime_type = None
+            file_size = None
+
 
     try:
         if has_attachment and "#summarize" in text.lower():

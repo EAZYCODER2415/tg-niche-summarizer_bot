@@ -480,7 +480,13 @@ def main() -> None:
         )
 
     # Application setup of the whole bot
-    application = Application.builder().token(token).rate_limiter(AIORateLimiter(overall_max_rate=30, group_max_rate=20)).post_init(post_init).build()
+    application = (
+        Application.builder()
+        .token(token)
+        .rate_limiter(AIORateLimiter(overall_max_rate=30, group_max_rate=20))
+        .post_init(post_init)
+        .build()
+    )
 
     # Command TREE (command handlers)
     application.add_handler(CommandHandler("start", start))

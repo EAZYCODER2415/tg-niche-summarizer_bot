@@ -188,7 +188,7 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     # This is exactly where the LLM call will slot in.
-    prompt, image_url = create_messageThread(chat_id, hours, thread_id, topic)
+    prompt, file_url = create_messageThread(chat_id, hours, thread_id, topic)
 
     # Check for valid prompt return
     if not prompt:
@@ -200,9 +200,9 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     # Run summarizeLLMtool function while keeping a 30-second time limit to prevent lagging
     try:
-        if prompt and image_url:
+        if prompt and file_url:
             summary = await asyncio.wait_for(
-                asyncio.to_thread(summarizeLLMtool, prompt, image_url), 
+                asyncio.to_thread(summarizeLLMtool, prompt, file_url), 
                 timeout=30.0
             )
         elif prompt:
@@ -328,13 +328,13 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         else:
             # Get filename, the rest set to NULL
             # 1. Fetch file name dynamically based on attachment type
-            if update.message.document:
+            if attachment_type == "document":
                 file_name = update.message.document.file_name
-            elif update.message.video:
+            elif attachment_type == "video":
                 file_name = getattr(update.message.video, "file_name", f"video_{update.message.video.file_id[:10]}.mp4")
-            elif update.message.audio:
+            elif attachment_type == "audio":
                 file_name = getattr(update.message.audio, "file_name", f"audio_{update.message.audio.file_id[:10]}.mp3")
-            elif update.message.video_note:
+            elif attachment_type == "video_note":
                 file_name = f"voice_{update.message.voice.file_id[:10]}.mp4"
             else:
                 file_name = "attachment"

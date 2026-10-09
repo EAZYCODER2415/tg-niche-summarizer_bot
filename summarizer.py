@@ -39,7 +39,7 @@ free_models = [
     "google/gemma-4-31b-it:free"
 ]
 
-def summarizeLLMtool(prompt: str, image_url: str = None) -> str:
+def summarizeLLMtool(prompt: str, file_url: str = None) -> str:
     """
     Summarizes chat messages or processes multimodal input using Qwen on OpenRouter.
     
@@ -52,33 +52,51 @@ def summarizeLLMtool(prompt: str, image_url: str = None) -> str:
     # Base text model (for first try)
     model = "qwen/qwen-2.5-72b-instruct"
 
-    # Image + Text multimodal summary:
-    if image_url:
-        model = "qwen/qwen-2.5-vl-72b-instruct:free"
+    # Separate URLs from raw document filenames
+    urls = []
+    doc_names = []
+
+    if file_url:
+        # Split by whitespace/newlines if file_url contains multiple bundled items
+        items = file_url.split()
+        for item in items:
+            if item.startswith("http://") or item.startswith("https://"):
+                urls.append(item)
+            else:
+                doc_names.append(item)
+
+    # Base text message with any hidden document filenames included as context
+    combined_text = f"Message: {prompt}"
+    if doc_names:
+        combined_text += f"\nAttachments: {', '.join(doc_names)}"
 
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            if image_url:
-                content = [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": image_url}}
-                ]
-            else:
-                content = prompt
+            # Build content list dynamically
+            content = [
+                {"type": "text", "text": combined_text}
+            ]
+
+            # Append image URLs cleanly
+            if urls:
+                model = "qwen/qwen-2.5-vl-72b-instruct:free"  # Switch to vision model
+                for url in urls:
+                    content.append({"type": "image_url", "image_url": {"url": urls}})
 
             response = client.chat.completions.create(
                 model=model,
-                extra_body={
-                    "models": free_models
-                },
+                extra_body={"models": free_models},
                 messages=[
-                    {"role": "system", "content": system_instruction},
+                    {
+                        "role": "system",
+                        "content": system_instruction,
+                    },
                     {"role": "user", "content": content}
                 ],
                 timeout=25.0
             )
-            
+
             return response.choices[0].message.content
 
         except APIError as e:
@@ -90,9 +108,9 @@ def summarizeLLMtool(prompt: str, image_url: str = None) -> str:
 
         except Exception as e:
             print(f"Unexpected error: {e}")
-            return f"⚠️ Error generating summary: {str(e)}"
+            return f"⚠️ Summary unavailable: {str(e)}"
 
-def checkForTopic(message: str, topic: str, image_url: str = None) -> bool:
+def checkForTopic(message: str, topic: str, file_url: str = None) -> bool:
     """
     Checks message for a specific topic input. Will return a boolean.
     """
@@ -100,38 +118,53 @@ def checkForTopic(message: str, topic: str, image_url: str = None) -> bool:
     # Base text model (for first try)
     model = "qwen/qwen-2.5-72b-instruct"
 
-    # Image + Text multimodal summary:
-    if image_url:
-        model = "qwen/qwen-2.5-vl-72b-instruct:free"
+    # Separate URLs from raw document filenames
+    urls = []
+    doc_names = []
+
+    if file_url:
+        # Split by whitespace/newlines if file_url contains multiple bundled items
+        items = file_url.split()
+        for item in items:
+            if item.startswith("http://") or item.startswith("https://"):
+                urls.append(item)
+            else:
+                doc_names.append(item)
+
+    # Base text message with any hidden document filenames included as context
+    combined_text = f"Message: {message}"
+    if doc_names:
+        combined_text += f"\nAttachments: {', '.join(doc_names)}"
 
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            if image_url:
-                content = [
-                    {"type": "topic", "topic": topic},
-                    {"type": "text", "text": message},
-                    {"type": "image_url", "image_url": {"url": image_url}}
-                ]
-            else:
-                content = [
-                    {"type": "topic", "topic": topic},
-                    {"type": "text", "text": message}
-                ]
-    
+            # Build content list dynamically
+            content = [
+                {"type": "topic", "topic": topic},
+                {"type": "text", "text": combined_text}
+            ]
+
+            # Append image URLs cleanly
+            if urls:
+                model = "qwen/qwen-2.5-vl-72b-instruct:free"  # Switch to vision model
+                for url in urls:
+                    content.append({"type": "image_url", "image_url": {"url": urls}})
+
             response = client.chat.completions.create(
                 model=model,
-                extra_body={
-                    "models": free_models
-                },
+                extra_body={"models": free_models},
                 messages=[
-                    {"role": "system", "content": f"You are detecting whether the given message (OR image local path if applicable) contains or is related to a specific topic input: {topic}. ONLY output 'True' if it fulfills the conditional and 'False' if otherwise, respectively."},
+                    {
+                        "role": "system",
+                        "content": f"You are detecting whether the given message (or attached files) is related to the topic: {topic}. Output ONLY 'True' or 'False'."
+                    },
                     {"role": "user", "content": content}
                 ],
                 timeout=25.0
             )
-            
-            return response.choices[0].message.content == "True"
+
+            return response.choices[0].message.content.strip() == "True"
 
         except APIError as e:
             print(f"[Attempt {attempt + 1}/{max_retries}] OpenRouter Error: {e}")

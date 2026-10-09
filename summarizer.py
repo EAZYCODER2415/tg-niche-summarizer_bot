@@ -136,7 +136,7 @@ def checkForTopic(message: str, topic: str, image_url: str = None) -> bool:
         except APIError as e:
             print(f"[Attempt {attempt + 1}/{max_retries}] OpenRouter Error: {e}")
             if attempt == max_retries - 1:
-                return f"⚠️ OpenRouter Error: Request failed after {max_retries} attempts."
+                return f"⚠️ OpenRouter Error: Request failed after {max_retries} attempts. Error {e}"
             
             time.sleep(2 ** attempt + 1)
 

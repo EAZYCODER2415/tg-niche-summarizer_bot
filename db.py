@@ -374,23 +374,20 @@ def get_chat_settings(chat_id: int) -> dict:
             return {"summary_thread_id": None, "is_enabled": True, "message_count": 0}
 
 
-def increment_message_count(chat_id: int) -> int:
+def increment_message_count(chat_id: int, thread_id: int | None = None) -> int:
     """
     Increments and returns the current message count for triggering activity summaries.
     Atomic operation prevents race conditions across concurrent messages.
     """
     query = """
-        INSERT INTO chat_metadata (chat_id, summary_thread_id, is_enabled, message_count)
-        VALUES (%s, NULL, TRUE, 1)
-        ON CONFLICT (chat_id) 
-        DO UPDATE SET 
-            message_count = chat_metadata.message_count + 1,
-            updated_at = CURRENT_TIMESTAMP
+        UPDATE chat_metadata 
+        SET message_count = chat_metadata.message_count + 1, updated_at = CURRENT_TIMESTAMP
+        WHERE chat_id = %s AND thread_id = %s
         RETURNING message_count;
     """
     with pool.connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(query, (chat_id,))
+            cur.execute(query, (chat_id, thread_id))
             new_count = cur.fetchone()[0]
             return new_count
 

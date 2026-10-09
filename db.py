@@ -332,14 +332,18 @@ def get_or_create_chat_metadata(chat_id: int, thread_id: int | None = None) -> d
         FROM chat_metadata 
         WHERE chat_id = %s AND thread_id = %s;
     """
-    
     with pool.connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
-            # Initialize if not present
-            cur.execute(insert_query, (chat_id, thread_id))
-            # Fetch guaranteed record
-            cur.execute(select_query, (chat_id, thread_id))
-            return cur.fetchone()
+            # 1. Initialize chat if absent
+            cur.execute(insert_query, (chat_id,thread_id))
+            # 2. Fetch record
+            cur.execute(select_query, (chat_id,thread_id))
+            row = cur.fetchone()
+            
+            # Fallback guard against returning None
+            if row is None:
+                return {"summary_thread_id": None, "is_enabled": True, "message_count": 0}
+            return row
 
 def update_chat_settings(chat_id: int, summary_thread_id: int | None = None, is_enabled: bool = True) -> None:
     """Updates or initializes topic routing and summary enablement settings."""

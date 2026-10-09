@@ -286,18 +286,8 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     settings = db.get_chat_settings(chat.id)
     is_enabled = settings.get("is_enabled")
 
-    # --- Disable summaries (Preserves target topic) ---
-    if subcommand == "disable":
-        db.update_chat_settings(chat.id, is_enabled=False)
-        settings = db.get_chat_settings(chat.id)
-        is_enabled = settings.get("is_enabled")
-        await update.message.reply_text(
-            "🔕 **Automatic summaries disabled.** Your target topic setting has been saved. Type `/config enable` to resume.",
-            parse_mode="Markdown"
-        )
-
     # --- Re-enable summaries ---
-    elif subcommand == "enable":
+    if subcommand == "enable":
         db.update_chat_settings(chat.id, is_enabled=True)
         await update.message.reply_text(
             f"🔔 **Automatic summaries re-enabled!** Type `/config disable` to undo this action if needed.",
@@ -332,6 +322,16 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         await update.message.reply_text(
             f"⚠️ **Error:** Automatic summary must be enabled to proceed.",
+            parse_mode="Markdown"
+        )
+
+    # --- Disable summaries (Preserves target topic) ---
+    if subcommand == "disable":
+        db.update_chat_settings(chat.id, is_enabled=False)
+        settings = db.get_chat_settings(chat.id)
+        is_enabled = settings.get("is_enabled")
+        await update.message.reply_text(
+            "🔕 **Automatic summaries disabled.** Your target topic setting has been saved. Type `/config enable` to resume.",
             parse_mode="Markdown"
         )
 

@@ -24,7 +24,10 @@ if DATABASE_URL:
         min_size=1,
         max_size=10,
         kwargs={"row_factory": dict_row},
-        open=True
+        open=True,
+        check=ConnectionPool.check_connection,
+        max_idle=300,
+        max_lifetime=1800
     )
 
 def get_connection():

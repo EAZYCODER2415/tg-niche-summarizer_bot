@@ -46,6 +46,8 @@ def execute_query(cursor, query: str, params: tuple = ()):
         query = query.replace("?", "%s")
     cursor.execute(query, params)
 
+# -------------------- MAIN DATABASE (handling messages) --------------------------
+
 def init_db():
     """Initialize the SQLite database and create the messages table if it doesn't exist."""
 
@@ -314,3 +316,92 @@ def mark_as_summarized(message_ids: list[int]) -> int:
         
         return updated_count
 
+# -------------------------- CHAT METADATA (handles chat settings and activity-threshold summaries) -------------------------------
+
+def get_or_create_chat_metadata(chat_id: int, thread_id: int | None = None) -> dict:
+    """
+    Ensures the chat is initialized in chat_metadata, then fetches its current settings.
+    """
+    insert_query = """
+        INSERT INTO chat_metadata (chat_id, thread_id, summary_thread_id, is_enabled, message_count, updated_at)
+        VALUES (%s, %s, NULL, TRUE, 0, CURRENT_TIMESTAMP)
+        ON CONFLICT (chat_id) DO NOTHING;
+    """
+    select_query = """
+        SELECT summary_thread_id, is_enabled, message_count 
+        FROM chat_metadata 
+        WHERE chat_id = %s AND thread_id = %s;
+    """
+    
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            # Initialize if not present
+            cur.execute(insert_query, (chat_id, thread_id))
+            # Fetch guaranteed record
+            cur.execute(select_query, (chat_id, thread_id))
+            return cur.fetchone()
+
+def update_chat_settings(chat_id: int, summary_thread_id: int | None = None, is_enabled: bool = True) -> None:
+    """Updates or initializes topic routing and summary enablement settings."""
+    query = """
+        INSERT INTO chat_metadata (chat_id, summary_thread_id, is_enabled, message_count)
+        VALUES (%s, %s, %s, 0)
+        ON CONFLICT (chat_id) 
+        DO UPDATE SET 
+            summary_thread_id = EXCLUDED.summary_thread_id,
+            is_enabled = EXCLUDED.is_enabled,
+            updated_at = CURRENT_TIMESTAMP;
+    """
+    with pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (chat_id, summary_thread_id, is_enabled))
+
+
+def get_chat_settings(chat_id: int) -> dict:
+    """Retrieves chat configuration (destination topic, status, and message count)."""
+    query = """
+        SELECT summary_thread_id, is_enabled, message_count 
+        FROM chat_metadata 
+        WHERE chat_id = %s;
+    """
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(query, (chat_id,))
+            row = cur.fetchone()
+            if row:
+                return row
+            # Default settings for new chats
+            return {"summary_thread_id": None, "is_enabled": True, "message_count": 0}
+
+
+def increment_message_count(chat_id: int) -> int:
+    """
+    Increments and returns the current message count for triggering activity summaries.
+    Atomic operation prevents race conditions across concurrent messages.
+    """
+    query = """
+        INSERT INTO chat_metadata (chat_id, summary_thread_id, is_enabled, message_count)
+        VALUES (%s, NULL, TRUE, 1)
+        ON CONFLICT (chat_id) 
+        DO UPDATE SET 
+            message_count = chat_metadata.message_count + 1,
+            updated_at = CURRENT_TIMESTAMP
+        RETURNING message_count;
+    """
+    with pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (chat_id,))
+            new_count = cur.fetchone()[0]
+            return new_count
+
+
+def reset_message_count(chat_id: int, thread_id: int | None = None) -> None:
+    """Resets the message counter back to zero after generating a summary."""
+    query = """
+        UPDATE chat_metadata 
+        SET message_count = 0, updated_at = CURRENT_TIMESTAMP 
+        WHERE chat_id = %s AND thread_id = %s;
+    """
+    with pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (chat_id, thread_id))

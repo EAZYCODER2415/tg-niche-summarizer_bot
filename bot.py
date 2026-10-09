@@ -128,7 +128,7 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
     
     return prompt, file_url
 
-async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_thread_id: int | None = None, is_automatic: bool = False) -> None:
     chat_id = update.effective_chat.id
 
     # Extract thread_id if inside a supergroup topic
@@ -137,6 +137,9 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if update.effective_chat.type == "supergroup"
         else None
     )
+
+    # Configure thread_id where the automatic summary will be sent in
+    send_thread_id = thread_id if not is_automatic and not target_thread_id else target_thread_id
 
     # Included parameters
     hours = 24.0 # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
@@ -150,10 +153,10 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if update and update.message:
                 await update.message.reply_text(missing_param_msg)
             else:
-                await context.bot.send_message(chat_id=chat_id, message_thread_id=thread_id, text=missing_param_msg)
+                await context.bot.send_message(chat_id=chat_id, message_thread_id=send_thread_id, text=missing_param_msg)
                 return
 
-        # User input summarize command without parameters
+        # User input summarize command with parameters but incorrect format
         try:
             hours = float(context.args[0]) # Parameter can arrive in any format (integer or decimal)
             if (hours > 72.0 or hours <= 0.0):
@@ -176,7 +179,7 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         status_msg = await context.bot.send_message(
             chat_id=chat_id,
-            message_thread_id=thread_id,
+            message_thread_id=send_thread_id,
             text="⏳ Processing..."
         )
 
@@ -266,6 +269,70 @@ def begin_processing(chat_id, user, attachment_type):
     """Your trigger handler logic."""
     print(f"Trigger condition met! Processing {attachment_type} attachment for chat {chat_id} from {user}...")
 
+# INSERT CONFIG COMMAND
+async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Configures bot to either post summaries by default, in a specific topic, or disable entirely."""
+    chat = update.effective_chat
+    user = update.effective_user
+    current_thread_id = update.message.message_thread_id
+
+    member = await context.bot.get_chat_member(chat.id, user.id)
+    if member.status not in ["administrator", "creator"]:
+        await update.message.reply_text("⛔ Only group administrators can configure summary settings.")
+        return
+
+    subcommand = context.args[0].lower() if context.args else "topic"
+
+    settings = db.get_chat_settings(chat.id)
+    is_enabled = settings.get("is_enabled")
+
+    if is_enabled:
+        # --- Set / Update target topic ---
+        if subcommand in ["topic", "here"]:
+            if current_thread_id:
+                db.update_chat_settings(chat.id, summary_thread_id=current_thread_id)
+                await update.message.reply_text(
+                    f"✅ **Automatic summary destination set!**\nThey will now be posted to this topic thread.",
+                    message_thread_id=current_thread_id,
+                    parse_mode="Markdown"
+                )
+            else:
+                # --- Set to default ---
+                db.update_summary_thread(chat.id, summary_thread_id=None, is_enabled=True)
+                await update.message.reply_text(
+                    f"🔄 **Reset to Default.** Automatic summaries will post in whichever topic reaches the threshold.",
+                    parse_mode="Markdown"
+                )
+
+        # --- Reset to default (Active Topic) ---
+        elif subcommand == "default":
+            db.update_chat_settings(chat.id, summary_thread_id=None)
+            await update.message.reply_text(
+                f"🔄 **Reset to Default.** Automatic summaries will post in whichever topic reaches the threshold.",
+                parse_mode="Markdown"
+            )
+    else:
+        await update.message.reply_text(
+            f"⚠️ **Error:** Automatic summary must be enabled to proceed.",
+            parse_mode="Markdown"
+        )
+
+    # --- OPTION C: Disable summaries (Preserves target topic) ---
+    if subcommand == "disable":
+        db.update_chat_settings(chat.id, is_enabled=False)
+        settings = db.get_chat_settings(chat.id)
+        is_enabled = settings.get("is_enabled")
+        await update.message.reply_text(
+            "🔕 **Automatic summaries disabled.** Your target topic setting has been saved. Type `/config enable` to resume."
+        )
+
+    # --- OPTION D: Re-enable summaries ---
+    elif subcommand == "enable":
+        db.update_chat_settings(chat.id, is_enabled=True)
+        await update.message.reply_text(
+            f"🔔 **Automatic summaries re-enabled!** Type `/config disable` to undo this action if needed.",
+            parse_mode="Markdown"
+        )
 
 async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Buffers every text message in a group chat for later summarization."""
@@ -420,33 +487,28 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
         # ACTIVITY-BASED TRIGGER SECTION HERE
 
-        # Initialize bot_data dict if not present
-        if "chat_counters" not in context.bot_data:
-            context.bot_data["chat_counters"] = {}
+        chat_status = db.get_or_create_chat_metadata(chat_id, thread_id)
+    
+        current_count = db.increment_message_count(chat_id, thread_id)
+        is_enabled = chat_status["is_enabled"]
+        summary_thread_id = chat_status["summary_thread_id"]
 
-        # Initialize composite key: (chat_id, chat_type, thread_id)
-        counter_key = (chat_id, chat_type, thread_id)
-        
-        # Increment counter for this specific composite key
-        current_count = context.bot_data["chat_counters"].get(counter_key, 0) + 1
-        context.bot_data["chat_counters"][counter_key] = current_count
-
-        logger.info(
-            f"Logged message {current_count}/{COUNTER_THRESHOLD} "
-            f"for chat {chat_id} ({chat_type}, thread: {thread_id})"
-        )
-
-        # Check threshold for this chat
-        if current_count >= COUNTER_THRESHOLD:
+        if is_enabled:
             logger.info(
-                f"Activity threshold reached (200 msgs) for key {counter_key}. "
-                f"Triggering automatic summary..."
+                f"Logged message {current_count}/{COUNTER_THRESHOLD} "
+                f"for chat {chat_id} ({chat_type}, thread: {thread_id})"
             )
-            context.bot_data["chat_counters"][counter_key] = 0  # Reset for this specific chat
+            # Check if threshold reached and automated summaries are active
+            if current_count >= COUNTER_THRESHOLD:
+                # If summary_thread_id is set -> scenario 2
+                # If summary_thread_id is NULL -> scenario 1 (use active thread_id)
+                target_thread_id = summary_thread_id if summary_thread_id is not None else thread_id
 
-            context.args = None  # Signals that this is an automated run, NOT a user command
-            # Non-blocking async task so log_message finishes immediately
-            asyncio.create_task(summarize(update, context))
+                # Pass target_thread_id into summarize
+                asyncio.create_task(summarize(update, context, target_thread_id=target_thread_id, is_automatic=True))
+
+                # Reset message counter
+                db.reset_message_count(chat_id, thread_id)
 
     except Exception as e:
         logger.error(f"Failed to log message: {e}")
@@ -508,6 +570,7 @@ def main() -> None:
     # Command TREE (command handlers)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("summarize", summarize))
+    application.add_handler(CommandHandler("config", config))
 
     # Catches all non-command text messages (group or private) and buffers them.
     application.add_handler(

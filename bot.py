@@ -28,7 +28,7 @@ import asyncio
 from imgStorage import safe_upload_image
 
 # Setup Telegram API libraries
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update 
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -36,6 +36,7 @@ from telegram.ext import (
     ContextTypes,
     filters,
     AIORateLimiter,
+    CallbackQueryHandler
 )
 
 # Log of bot status while running background checks (INFO, WARNING, ERROR) 
@@ -63,6 +64,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         parse_mode="Markdown"
     )
     return
+
+async def cancel_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query.data == "cancel_summary":
+        # Delete the progress message
+        try:
+            await query.message.delete()
+        except Exception as e:
+            logger.error(f"Failed to delete message on cancel: {e}")
+            # Show a pop-up toast notification to the user
+            await query.answer("⚠️ Could not cancel summary.", show_alert=True)
 
 def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=None):
     print(f"DEBUG: querying chat_id={chat_id}, thread_id={thread_id}")
@@ -119,13 +131,6 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
                 if has_attachment and file_data:
                     file_url_lines.append(file_data)
 
-    # Extract the database IDs from the retrieved message buffer
-    processed_ids = [msg['id'] for msg in messages if 'id' in msg]
-
-    # Mark them as summarized in Neon Postgres
-    if processed_ids:
-        db.mark_as_summarized(processed_ids)
-
     # Show status if a topic is added into the parameters
     if topic:
         print(f"Retrieved {len(prompt_lines)} that match topic of '{topic}'!")
@@ -137,7 +142,7 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
     else:
         file_url = None
     
-    return prompt, file_url, link
+    return messages, prompt, file_url, link
 
 async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_thread_id: int | None = None, is_automatic: bool = False) -> None:
     chat_id = update.effective_chat.id
@@ -155,6 +160,11 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
     # Included parameters
     hours = 24.0 # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
     topic = '' # No topic as default, topic parameter in string format.
+
+    # Create the Cancel button with a callback payload
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Cancel", callback_data="cancel_summary")]
+    ])
 
     # 1. Require parameters: Check if context.args is empty
     if context and context.args is not None:
@@ -186,27 +196,28 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
 
     # Processing message sent, waiting for summary processing completion to edit its own message.
     if update and update.message:
-        status_msg = await update.message.reply_text("⏳ Processing...")
+        status_msg = await update.message.reply_text("⏳ Processing...", reply_markup=keyboard)
     else:
         status_msg = await context.bot.send_message(
             chat_id=chat_id,
             message_thread_id=send_thread_id,
-            text="⏳ Processing..."
+            text="⏳ Processing...",
+            reply_markup=keyboard
         )
 
     buffered = db.get_messages(chat_id, thread_id)
     
     # No messages buffered in database.
     if not buffered:
-        await status_msg.edit_text("No messages logged yet to summarize.")
+        await status_msg.edit_text("No messages logged yet to summarize.", reply_markup=None)
         return
 
     # This is exactly where the LLM call will slot in.
-    prompt, file_url, link = create_messageThread(chat_id, hours, thread_id, topic)
+    messages, prompt, file_url, link = create_messageThread(chat_id, hours, thread_id, topic)
 
     # Check for valid prompt return
     if not prompt:
-        await status_msg.edit_text("⚠️ No relevant messages found for this topic.")
+        await status_msg.edit_text("⚠️ No relevant messages found for this topic.", reply_markup=None)
         return
     
     # Initialize summary
@@ -225,35 +236,19 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
                 timeout=30.0
             )
         else:
-            await status_msg.edit_text("⚠️ Failed to generate summary. Cannot fetch data.")
+            await status_msg.edit_text("⚠️ Failed to generate summary. Cannot fetch data.", reply_markup=None)
 
         if not summary:
-            await status_msg.edit_text("⚠️ Failed to generate summary.")
-            
+            await status_msg.edit_text("⚠️ Failed to generate summary.", reply_markup=None)
         else:
-            await status_msg.edit_text(summary, parse_mode="Markdown")
-            # # Helper to chunk long text to safe limits (4000 chars)
-            # MAX_LEN = 4000
-            # if len(summary) >= MAX_LEN:
-            #     for i in range(0, len(summary), MAX_LEN):
-            #         if update.message:
-            #             await update.message.reply_text(summary[i : i + MAX_LEN])
-            #         else:
-            #             await context.bot.send_message(
-            #                 chat_id=chat_id,
-            #                 message_thread_id=thread_id,
-            #                 text=summary[i : i + MAX_LEN]
-            #             )
-            # else:
-            #     for i in range(0, len(summary), MAX_LEN):
-            #         if update.message:
-            #             await update.message.reply_text(summary[i : i + MAX_LEN])
-            #         else:
-            #             await context.bot.send_message(
-            #                 chat_id=chat_id,
-            #                 message_thread_id=thread_id,
-            #                 text=summary[i : i + MAX_LEN]
-            #             )
+            await status_msg.edit_text(summary, reply_markup=None, parse_mode="Markdown")
+            
+            # Mark them all as summarized after completion
+            processed_ids = [msg['id'] for msg in messages if 'id' in msg]
+            # Mark them as summarized in Neon Postgres
+            if processed_ids:
+                db.mark_messages_as_summarized(processed_ids) # <--- Already happening ONLY on success!
+            
     except asyncio.TimeoutError:
         # This triggers if summarizeLLMtool takes longer than 30 seconds
         await status_msg.edit_text("⏱️ Error: The request took longer than 30 seconds to complete. Please try again.")
@@ -623,6 +618,9 @@ def main() -> None:
         )
     )
 
+    # Add a callback Cancel button for the summarize command
+    application.add_handler(CallbackQueryHandler(cancel_callback_handler, pattern="^cancel_summary$"))
+    
     # Register global error handler
     application.add_error_handler(error_handler)
 

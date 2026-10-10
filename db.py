@@ -390,7 +390,7 @@ def increment_message_count(chat_id: int, thread_id: int | None = None) -> int:
     Atomic operation prevents race conditions across concurrent messages.
     """
 
-    active_thread = thread_id if thread_id is not None else 0
+    active_thread = thread_id if thread_id is not None else None
 
     select_query = """
         SELECT message_count 

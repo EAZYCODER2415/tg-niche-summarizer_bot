@@ -49,6 +49,9 @@ logger = logging.getLogger(__name__)
 # Variables for Activity-Based Trigger
 COUNTER_THRESHOLD = 200
 
+# Track asyncio active summary tasks
+active_summary_tasks: dict[tuple[int, int | None], asyncio.Task] = {}
+
 # --- Handlers ----------------------------------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
@@ -67,14 +70,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def cancel_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    await query.answer("✅ Canceled summary.", show_alert=True)
+
     if query.data == "cancel_summary":
-        # Delete the progress message
+        chat_id = query.message.chat.id
+        thread_id = query.message.message_thread_id
+        task_key = (chat_id, thread_id)
+
+        # 1. Cancel the running task if it exists
+        task = active_summary_tasks.get(task_key)
+        if task and not task.done():
+            task.cancel()
+
+        # 2. Delete the progress message UI
         try:
             await query.message.delete()
         except Exception as e:
-            logger.error(f"Failed to delete message on cancel: {e}")
-            # Show a pop-up toast notification to the user
-            await query.answer("⚠️ Could not cancel summary.", show_alert=True)
+            logger.error(f"Failed to delete status message on cancel: {e}")
 
 def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=None):
     print(f"DEBUG: querying chat_id={chat_id}, thread_id={thread_id}")
@@ -157,6 +169,9 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
     # Configure thread_id where the automatic summary will be sent in
     send_thread_id = thread_id if not is_automatic and not target_thread_id else target_thread_id
 
+    # Obtain task key
+    task_key = (chat_id, send_thread_id)
+
     # Included parameters
     hours = 24.0 # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
     topic = '' # No topic as default, topic parameter in string format.
@@ -205,56 +220,69 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
             reply_markup=keyboard
         )
 
-    buffered = db.get_messages(chat_id, thread_id)
-    
-    # No messages buffered in database.
-    if not buffered:
-        await status_msg.edit_text("No messages logged yet to summarize.", reply_markup=None)
-        return
+    async def summary_task():
+        buffered = db.get_messages(chat_id, thread_id)
+        
+        # No messages buffered in database.
+        if not buffered:
+            await status_msg.edit_text("No messages logged yet to summarize.", reply_markup=None)
+            return
 
-    # This is exactly where the LLM call will slot in.
-    messages, prompt, file_url, link = create_messageThread(chat_id, hours, thread_id, topic)
+        # This is exactly where the LLM call will slot in.
+        messages, prompt, file_url, link = create_messageThread(chat_id, hours, thread_id, topic)
 
-    # Check for valid prompt return
-    if not prompt:
-        await status_msg.edit_text("⚠️ No relevant messages found for this topic.", reply_markup=None)
-        return
-    
-    # Initialize summary
-    summary = None
+        # Check for valid prompt return
+        if not prompt:
+            await status_msg.edit_text("⚠️ No relevant messages found for this topic.", reply_markup=None)
+            return
+        
+        # Initialize summary
+        summary = None
 
-    # Run summarizeLLMtool function while keeping a 30-second time limit to prevent lagging
-    try:
-        if prompt and file_url:
-            summary = await asyncio.wait_for(
-                asyncio.to_thread(summarizeLLMtool, prompt, file_url, link), 
-                timeout=30.0
-            )
-        elif prompt:
-            summary = await asyncio.wait_for(
-                asyncio.to_thread(summarizeLLMtool, prompt, None, link), 
-                timeout=30.0
-            )
-        else:
-            await status_msg.edit_text("⚠️ Failed to generate summary. Cannot fetch data.", reply_markup=None)
+        # Run summarizeLLMtool function while keeping a 30-second time limit to prevent lagging
+        try:
+            if prompt and file_url:
+                summary = await asyncio.wait_for(
+                    asyncio.to_thread(summarizeLLMtool, prompt, file_url, link), 
+                    timeout=30.0
+                )
+            elif prompt:
+                summary = await asyncio.wait_for(
+                    asyncio.to_thread(summarizeLLMtool, prompt, None, link), 
+                    timeout=30.0
+                )
+            else:
+                await status_msg.edit_text("⚠️ Failed to generate summary. Cannot fetch data.", reply_markup=None)
 
-        if not summary:
-            await status_msg.edit_text("⚠️ Failed to generate summary.", reply_markup=None)
-        else:
-            await status_msg.edit_text(summary, reply_markup=None, parse_mode="Markdown")
-            
-            # Mark them all as summarized after completion
-            processed_ids = [msg['id'] for msg in messages if 'id' in msg]
-            # Mark them as summarized in Neon Postgres
-            if processed_ids:
-                db.mark_messages_as_summarized(processed_ids) # <--- Already happening ONLY on success!
-            
-    except asyncio.TimeoutError:
-        # This triggers if summarizeLLMtool takes longer than 30 seconds
-        await status_msg.edit_text("⏱️ Error: The request took longer than 30 seconds to complete. Please try again.")
+            # Register task in dictionary to ensure it is cancelable
+            current_task = asyncio.create_task(summary_task())
+            active_summary_tasks[task_key] = current_task
 
-    except Exception as e:
-        await status_msg.edit_text(f"⚠️ An unexpected error occurred: {e}")
+            try:
+                await current_task
+            except asyncio.CancelledError:
+                logger.info(f"Summary task cancelled for chat {thread_id}")
+                return
+            finally:
+                # Clean up task reference when done or cancelled
+                active_summary_tasks.pop(task_key, None)
+
+            if not summary:
+                await status_msg.edit_text("⚠️ Failed to generate summary.", reply_markup=None)
+            else:
+                await status_msg.edit_text(summary, reply_markup=None, parse_mode="Markdown")
+                
+                # Mark them all as summarized after completion
+                processed_ids = [msg['id'] for msg in messages if 'id' in msg]
+                if processed_ids:
+                    db.mark_as_summarized(processed_ids)
+                
+        except asyncio.TimeoutError:
+            # This triggers if summarizeLLMtool takes longer than 30 seconds
+            await status_msg.edit_text("⏱️ Error: The request took longer than 30 seconds to complete. Please try again.")
+
+        except Exception as e:
+            await status_msg.edit_text(f"⚠️ An unexpected error occurred: {e}")
 
 
 def get_attachment_info(message):
@@ -620,7 +648,7 @@ def main() -> None:
 
     # Add a callback Cancel button for the summarize command
     application.add_handler(CallbackQueryHandler(cancel_callback_handler, pattern="^cancel_summary$"))
-    
+
     # Register global error handler
     application.add_error_handler(error_handler)
 

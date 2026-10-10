@@ -52,10 +52,17 @@ COUNTER_THRESHOLD = 200
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         f"Hi! I'm your group summary bot. Add me to a chat and I'll start keeping track of the conversation.\n\n"
-        f"/summarize [time (in hrs)] [[topic (str format)]]:\nSummarize a conversation within given time parameter (calculated in hours) and topic parameter.\n"
+        f"**`/summarize`** **[time (in hrs)] [[topic (str format)]]**:\nSummarize a conversation within given time parameter (calculated in hours) and topic parameter.\n"
         f"REMARKS: Hours in either integers or decimals are acceptable.\n\n"
-        f"When sending messages with attachments, add a #summarize tag to include them inside the summary data."
+        f"When sending messages with attachments, add a #summarize tag to include them inside the summary data.\n\n"
+        f"**`/config [param]`**:\nConfigure automatic summary settings to customize the group's experience.\n"
+        f"• `/config topic/here` - Set summary target to current topic\n"
+        f"• `/config default` - Set to default routing\n"
+        f"• `/config enable` - Re-enable automatic summaries\n"
+        f"• `/config disable` - Disable automatic summaries\n",
+        parse_mode="Markdown"
     )
+    return
 
 def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=None):
     print(f"DEBUG: querying chat_id={chat_id}, thread_id={thread_id}")
@@ -67,13 +74,17 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
     logger.info(f"🎰Summarize command called. Counted {total_count} messages for summarizer logging.")
     
     if total_count == 0:
-        return None, None
+        return None, None, None
 
     # 2. Retrieve messages from database
     messages = db.get_messages(chat_id=chat_id, thread_id=thread_id, since=since_time, hours=hours)
 
     prompt_lines = []
     file_url_lines = []
+
+    if messages:
+        earliest_msg = messages[0]
+        link = earliest_msg["link"]
 
     # 3. Format messages into a single prompt string for LLM
     for msg in messages:
@@ -126,7 +137,7 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
     else:
         file_url = None
     
-    return prompt, file_url
+    return prompt, file_url, link
 
 async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_thread_id: int | None = None, is_automatic: bool = False) -> None:
     chat_id = update.effective_chat.id
@@ -191,7 +202,7 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
         return
 
     # This is exactly where the LLM call will slot in.
-    prompt, file_url = create_messageThread(chat_id, hours, thread_id, topic)
+    prompt, file_url, link = create_messageThread(chat_id, hours, thread_id, topic)
 
     # Check for valid prompt return
     if not prompt:
@@ -205,12 +216,12 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
     try:
         if prompt and file_url:
             summary = await asyncio.wait_for(
-                asyncio.to_thread(summarizeLLMtool, prompt, file_url), 
+                asyncio.to_thread(summarizeLLMtool, prompt, file_url, link), 
                 timeout=30.0
             )
         elif prompt:
             summary = await asyncio.wait_for(
-                asyncio.to_thread(summarizeLLMtool, prompt), 
+                asyncio.to_thread(summarizeLLMtool, prompt, None, link), 
                 timeout=30.0
             )
         else:
@@ -220,7 +231,7 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
             await status_msg.edit_text("⚠️ Failed to generate summary.")
             
         else:
-            await status_msg.edit_text(summary)
+            await status_msg.edit_text(summary, parse_mode="Markdown")
             # # Helper to chunk long text to safe limits (4000 chars)
             # MAX_LEN = 4000
             # if len(summary) >= MAX_LEN:
@@ -272,6 +283,9 @@ def begin_processing(chat_id, user, attachment_type):
 # INSERT CONFIG COMMAND
 async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Configures bot to either post summaries by default, in a specific topic, or disable entirely."""
+    if not update.message or not update.effective_chat:
+        return
+    
     chat = update.effective_chat
     user = update.effective_user
     current_thread_id = update.message.message_thread_id
@@ -281,59 +295,75 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("⛔ Only group administrators can configure summary settings.")
         return
 
+    VALID_SUBCOMMANDS = ["enable", "disable", "topic", "here", "default"]
     subcommand = context.args[0].lower() if context.args else "topic"
 
     settings = db.get_chat_settings(chat.id)
     is_enabled = settings.get("is_enabled")
 
-    # --- Re-enable summaries ---
-    if subcommand == "enable":
-        db.update_chat_settings(chat.id, is_enabled=True)
+    if subcommand not in VALID_SUBCOMMANDS:
         await update.message.reply_text(
-            f"🔔 **Automatic summaries re-enabled!** Type `/config disable` to undo this action if needed.",
+            "⚠️ **Invalid command parameter.**\n\n"
+            "**Usage:**\n"
+            "• `/config topic/here` - Set summary target to current topic\n"
+            "• `/config default` - Set to default routing\n"
+            "• `/config enable` - Re-enable automatic summaries\n"
+            "• `/config disable` - Disable automatic summaries\n",
+            message_thread_id=current_thread_id,
             parse_mode="Markdown"
         )
+        return
+    else:
+        # --- Re-enable summaries ---
+        if subcommand == "enable":
+            db.update_chat_settings(chat.id, is_enabled=True)
+            await update.message.reply_text(
+                f"🔔 **Automatic summaries re-enabled!** Type `/config disable` to undo this action if needed.",
+                parse_mode="Markdown"
+            )
+            return
 
-    if is_enabled:
-        # --- Set / Update target topic ---
-        if subcommand in ["topic", "here"]:
-            if current_thread_id:
-                db.update_chat_settings(chat.id, summary_thread_id=current_thread_id)
-                await update.message.reply_text(
-                    f"✅ **Automatic summary destination set!**\nThey will now be posted to this topic thread.",
-                    message_thread_id=current_thread_id,
-                    parse_mode="Markdown"
-                )
-            else:
-                # --- Set to default ---
-                db.update_summary_thread(chat.id, summary_thread_id=None, is_enabled=True)
+        if is_enabled:
+            # --- Set / Update target topic ---
+            if subcommand in ["topic", "here"]:
+                if current_thread_id:
+                    db.update_chat_settings(chat.id, summary_thread_id=current_thread_id)
+                    await update.message.reply_text(
+                        f"✅ **Automatic summary destination set!**\nThey will now be posted to this topic thread.",
+                        message_thread_id=current_thread_id,
+                        parse_mode="Markdown"
+                    )
+                else:
+                    # --- Set to default ---
+                    db.update_summary_thread(chat.id, summary_thread_id=None, is_enabled=True)
+                    await update.message.reply_text(
+                        f"🔄 **Reset to Default.** Automatic summaries will post in whichever topic reaches the threshold.",
+                        parse_mode="Markdown"
+                    )
+
+            # --- Reset to default (Active Topic) ---
+            elif subcommand == "default":
+                db.update_chat_settings(chat.id, summary_thread_id=None)
                 await update.message.reply_text(
                     f"🔄 **Reset to Default.** Automatic summaries will post in whichever topic reaches the threshold.",
                     parse_mode="Markdown"
                 )
-
-        # --- Reset to default (Active Topic) ---
-        elif subcommand == "default":
-            db.update_chat_settings(chat.id, summary_thread_id=None)
+        else:
             await update.message.reply_text(
-                f"🔄 **Reset to Default.** Automatic summaries will post in whichever topic reaches the threshold.",
+                f"⚠️ **Error:** Automatic summary must be enabled to proceed.",
                 parse_mode="Markdown"
             )
-    else:
-        await update.message.reply_text(
-            f"⚠️ **Error:** Automatic summary must be enabled to proceed.",
-            parse_mode="Markdown"
-        )
 
-    # --- Disable summaries (Preserves target topic) ---
-    if subcommand == "disable":
-        db.update_chat_settings(chat.id, is_enabled=False)
-        settings = db.get_chat_settings(chat.id)
-        is_enabled = settings.get("is_enabled")
-        await update.message.reply_text(
-            "🔕 **Automatic summaries disabled.** Your target topic setting has been saved. Type `/config enable` to resume.",
-            parse_mode="Markdown"
-        )
+        # --- Disable summaries (Preserves target topic) ---
+        if subcommand == "disable":
+            db.update_chat_settings(chat.id, is_enabled=False)
+            settings = db.get_chat_settings(chat.id)
+            is_enabled = settings.get("is_enabled")
+            await update.message.reply_text(
+                "🔕 **Automatic summaries disabled.** Your target topic setting has been saved. Type `/config enable` to resume.",
+                parse_mode="Markdown"
+            )
+            return
 
 async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Buffers every text message in a group chat for later summarization."""
@@ -412,6 +442,14 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             mime_type = None
             file_size = None
 
+    # Get link from message
+    if update.effective_chat.username:
+        # Public group/channel
+        link = f"https://t.me/{update.effective_chat.username}/{update.message.message_id}"
+    elif str(chat_id).startswith("-100"):
+        # Private supergroup
+        clean_chat_id = str(chat_id)[4:]
+        link = f"https://t.me/c/{clean_chat_id}/{update.message.message_id}"
 
     try:
         if has_attachment and "#summarize" in text.lower():
@@ -430,7 +468,8 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     local_path=local_path,
                     mime_type=mime_type,
                     file_size=file_size,
-                    timestamp=timestamp
+                    timestamp=timestamp,
+                    link=link
                 )
             elif chat_type == "private":
                 db.log_message(
@@ -447,7 +486,8 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     local_path=local_path,
                     mime_type=mime_type,
                     file_size=file_size,
-                    timestamp=timestamp
+                    timestamp=timestamp,
+                    link=link
                 )
         else:
             if chat_type in ["group", "supergroup"]:
@@ -465,7 +505,8 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     local_path=None,
                     mime_type=None,
                     file_size=None,
-                    timestamp=timestamp
+                    timestamp=timestamp,
+                    link=link
                 )
             elif chat_type == "private":
                 db.log_message(
@@ -482,25 +523,26 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     local_path=None,
                     mime_type=None,
                     file_size=None,
-                    timestamp=timestamp
+                    timestamp=timestamp,
+                    link=link
                 )
             logger.info(f"Logged message from {user} in chat {chat_id}")
 
         # ACTIVITY-BASED TRIGGER SECTION HERE
 
         chat_status = db.get_or_create_chat_metadata(chat_id, thread_id)
-    
-        current_count = db.increment_message_count(chat_id, thread_id)
         is_enabled = chat_status["is_enabled"]
         summary_thread_id = chat_status["summary_thread_id"]
+        current_count = db.increment_message_count(chat_id, thread_id)
+        current_count = current_count["message_count"]
 
         if is_enabled:
             logger.info(
-                f"Logged message {current_count}/{COUNTER_THRESHOLD} "
+                f"Logged message {chat_status["message_count"]}/{COUNTER_THRESHOLD} "
                 f"for chat {chat_id} ({chat_type}, thread: {thread_id})"
             )
             # Check if threshold reached and automated summaries are active
-            if current_count >= COUNTER_THRESHOLD:
+            if chat_status["message_count"] >= COUNTER_THRESHOLD:
                 # If summary_thread_id is set -> scenario 2
                 # If summary_thread_id is NULL -> scenario 1 (use active thread_id)
                 target_thread_id = summary_thread_id if summary_thread_id is not None else thread_id

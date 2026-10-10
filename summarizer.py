@@ -39,7 +39,7 @@ free_models = [
     "google/gemma-4-31b-it:free"
 ]
 
-def summarizeLLMtool(prompt: str, file_url: str = None) -> str:
+def summarizeLLMtool(prompt: str, file_url: str = None, link: str = None) -> str:
     """
     Summarizes chat messages or processes multimodal input using Qwen on OpenRouter.
     

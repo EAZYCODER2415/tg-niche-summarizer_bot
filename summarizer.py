@@ -70,6 +70,10 @@ def summarizeLLMtool(prompt: str, file_url: str = None, link: str = None) -> str
     if doc_names:
         combined_text += f"\nAttachments: {', '.join(doc_names)}"
 
+    # Add first message link for processing
+    if link:
+        combined_text += f"\nFirst message link: {link}"
+
     max_retries = 3
     for attempt in range(max_retries):
         try:

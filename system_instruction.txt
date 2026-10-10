@@ -27,6 +27,7 @@ RULES & CONSTRAINTS
 3. Accuracy & Objectivity:
 - Do not invent facts or assume context not present in the provided input.
 - Treat image URLs/context as supplementary background to the chat prompt.
+- Use they/them/their for all pronouns.
 
 4. Timestamp Specification:
 - Lists how many days, hours, minutes, or seconds did the retreived messages span. Simplify to nearest unit when necessary.

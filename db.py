@@ -79,6 +79,19 @@ def init_db():
                 )
                 """
             )
+            cursor.execute(
+                f"""
+                CREATE TABLE IF NOT EXISTS chat_metadata (
+                    id {id_type},
+                    chat_id BIGINT NOT NULL,
+                    thread_id INTEGER,
+                    summary_thread_id BIGINT,
+                    is_enabled BOOLEAN DEFAULT FALSE,
+                    message_count INTEGER,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
         else:
             cursor.execute(
                 f"""
@@ -99,6 +112,19 @@ def init_db():
                     file_size INTEGER,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     is_summarized BOOLEAN DEFAULT FALSE
+                )
+                """
+            )
+            cursor.execute(
+                f"""
+                CREATE TABLE IF NOT EXISTS chat_metadata (
+                    id {id_type},
+                    chat_id BIGINT NOT NULL,
+                    thread_id INTEGER,
+                    summary_thread_id BIGINT,
+                    is_enabled BOOLEAN DEFAULT FALSE,
+                    message_count INTEGER,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
@@ -324,16 +350,6 @@ def get_or_create_chat_metadata(chat_id: int, thread_id: int | None = None) -> d
     """
     Ensures the chat is initialized in chat_metadata, then fetches its current settings.
     """
-    insert_query = """
-        INSERT INTO chat_metadata (chat_id, thread_id, summary_thread_id, is_enabled, message_count, updated_at)
-        VALUES (%s, %s, %s, TRUE, 1, CURRENT_TIMESTAMP)
-        RETURNING summary_thread_id, is_enabled, message_count;
-    """
-    select_query = """
-        SELECT summary_thread_id, is_enabled, message_count 
-        FROM chat_metadata 
-        WHERE chat_id = %s AND thread_id = %s;
-    """
 
     # Fallback: In case there are no existing topics in metadata before this one
     try:
@@ -342,14 +358,18 @@ def get_or_create_chat_metadata(chat_id: int, thread_id: int | None = None) -> d
     except:
         summary_thread_id = None
 
+    query = """
+        INSERT INTO chat_metadata (chat_id, thread_id, summary_thread_id, is_enabled, message_count, updated_at)
+        VALUES (%s, %s, %s, TRUE, 1, CURRENT_TIMESTAMP)
+        ON CONFLICT (chat_id, COALESCE(thread_id, -1)) 
+        DO UPDATE SET updated_at = chat_metadata.updated_at
+        RETURNING summary_thread_id, is_enabled, message_count;
+    """
+
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(select_query, (chat_id,thread_id))
-        row = cursor.fetchone()
-        if not row:
-            cursor.execute(insert_query, (chat_id,thread_id,summary_thread_id))
-            row = cursor.fetchone()
-        return row
+        cursor.execute(query, (chat_id, thread_id, summary_thread_id))
+        return cursor.fetchone()
 
 def update_chat_settings(chat_id: int, summary_thread_id: int | None = None, is_enabled: bool = True) -> None:
     """Updates or initializes topic routing and summary enablement settings."""
@@ -386,48 +406,22 @@ def get_chat_settings(chat_id: int) -> dict:
 
 def increment_message_count(chat_id: int, thread_id: int | None = None) -> int:
     """
-    Increments and returns the current message count for triggering activity summaries.
-    Atomic operation prevents race conditions across concurrent messages.
+    Atomically increments message count or creates the row if it doesn't exist yet.
     """
-
-    active_thread = thread_id if thread_id is not None else None
-
-    select_query = """
-        SELECT message_count 
-        FROM chat_metadata 
-        WHERE chat_id = %s AND thread_id = %s;
-    """
-    
-    update_query = """
-        UPDATE chat_metadata 
-        SET message_count = message_count + 1, updated_at = CURRENT_TIMESTAMP 
-        WHERE chat_id = %s AND thread_id = %s
-        RETURNING message_count;
-    """
-    
-    insert_query = """
+    query = """
         INSERT INTO chat_metadata (chat_id, thread_id, summary_thread_id, is_enabled, message_count, updated_at)
         VALUES (%s, %s, NULL, TRUE, 1, CURRENT_TIMESTAMP)
+        ON CONFLICT (chat_id, COALESCE(thread_id, -1))
+        DO UPDATE SET 
+            message_count = chat_metadata.message_count + 1,
+            updated_at = CURRENT_TIMESTAMP
         RETURNING message_count;
     """
 
     with get_connection() as conn:
         cursor = conn.cursor()
-        
-        # 1. Check if row exists for this topic
-        cursor.execute(select_query, (chat_id, active_thread))
-        row = cursor.fetchone()
-
-        if row:
-            # 2a. Update existing record
-            cursor.execute(update_query, (chat_id, active_thread))
-            result = cursor.fetchone()
-            return result
-        else:
-            # 2b. Insert new record with RETURNING
-            cursor.execute(insert_query, (chat_id, active_thread))
-            result = cursor.fetchone()
-            return result
+        cursor.execute(query, (chat_id, thread_id))
+        return cursor.fetchone()
 
 
 def reset_message_count(chat_id: int, thread_id: int | None = None) -> None:

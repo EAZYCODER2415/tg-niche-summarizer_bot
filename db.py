@@ -429,7 +429,7 @@ def reset_message_count(chat_id: int, thread_id: int | None = None) -> None:
     query = """
         UPDATE chat_metadata 
         SET message_count = 0, updated_at = CURRENT_TIMESTAMP 
-        WHERE chat_id = %s AND thread_id = %s;
+        WHERE chat_id = %s AND COALESCE(thread_id, -1) = COALESCE(%s, -1);
     """
     with get_connection() as conn:
         cursor = conn.cursor()

@@ -176,6 +176,11 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
     hours = 24.0 # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
     topic = '' # No topic as default, topic parameter in string format.
 
+    # Create the Cancel button with a callback payload
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Cancel", callback_data="cancel_summary")]
+    ])
+
     # 1. Require parameters: Check if context.args is empty
     if context and context.args is not None:
         # User input summarize command without parameters
@@ -214,11 +219,6 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
             text="⏳ Processing...",
             reply_markup=keyboard
         )
-
-    # Create the Cancel button with a callback payload
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ Cancel", callback_data="cancel_summary")]
-    ])
 
     async def summary_task():
         buffered = db.get_messages(chat_id, thread_id)

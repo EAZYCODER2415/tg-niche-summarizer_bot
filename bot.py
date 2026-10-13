@@ -221,20 +221,14 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
         )
 
     async def summary_task():
-        buffered = db.get_messages(chat_id, thread_id)
-        
-        # No messages buffered in database.
-        if not buffered:
-            await status_msg.edit_text("No messages logged yet to summarize.", reply_markup=None)
-            return
-
-        # This is exactly where the LLM call will slot in.
         messages, prompt, file_url, link = create_messageThread(chat_id, hours, thread_id, topic)
 
+        if not messages:
+            return "No messages logged yet to summarize.", messages
+        
         # Check for valid prompt return
         if not prompt:
-            await status_msg.edit_text("⚠️ No relevant messages found for this topic.", reply_markup=None)
-            return
+            return"⚠️ No relevant messages found for this topic.", messages
         
         # Initialize summary
         summary = None
@@ -251,8 +245,8 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
                 timeout=30.0
             )
         else:
-            return "⚠️ Failed to generate summary. Cannot fetch data."
-        return summary
+            return "⚠️ Failed to generate summary. Cannot fetch data.", messages
+        return summary, messages
 
     # Register task in dictionary to ensure it is cancelable
     current_task = asyncio.create_task(summary_task())
@@ -266,7 +260,7 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
         
         # 6. Post-process successful generation
         if not summary:
-            return  # Error message was already edited inside summary_task if needed
+            return
         else:
             await status_msg.edit_text(summary, reply_markup=None, parse_mode="Markdown")
             

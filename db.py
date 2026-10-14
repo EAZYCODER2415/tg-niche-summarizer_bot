@@ -385,18 +385,17 @@ def update_chat_settings(chat_id: int, summary_thread_id: int | None = None, is_
         cursor.execute(update_query, (summary_thread_id, is_enabled, chat_id))
 
 
-def get_chat_settings(chat_id: int) -> dict:
+def get_chat_settings(chat_id: int, thread_id: int | None = None) -> dict:
     """Retrieves chat configuration (destination topic, status, and message count)."""
     query = """
         SELECT summary_thread_id, is_enabled, message_count 
         FROM chat_metadata 
-        WHERE chat_id = %s
-        ORDER BY updated_at DESC
+        WHERE chat_id = %s AND COALESCE(thread_id, -1) = COALESCE(%s, -1)
         LIMIT 1;
     """
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(query, (chat_id,))
+        cursor.execute(query, (chat_id,thread_id))
         row = cursor.fetchone()
         if row:
             return row

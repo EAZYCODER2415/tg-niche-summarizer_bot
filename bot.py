@@ -68,21 +68,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
     return
 
-async def cancel_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cancel_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
-    await query.answer("✅ Canceled summary.", show_alert=True)
 
     if query.data == "cancel_summary":
         chat_id = query.message.chat.id
-        thread_id = query.message.message_thread_id
-        task_key = (chat_id, thread_id)
 
-        # 1. Cancel the running task if it exists
+        message_id = query.message.message_id
+        
+        # Target the exact task associated with this specific progress message
+        task_key = (chat_id, message_id)
+        
         task = active_summary_tasks.get(task_key)
         if task and not task.done():
             task.cancel()
 
-        # 2. Delete the progress message UI
+        # DELETE the progress message immediately so UI updates instantly!
         try:
             await query.message.delete()
         except Exception as e:
@@ -156,7 +157,7 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
     
     return messages, prompt, file_url, link
 
-async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_thread_id: int | None = None, is_automatic: bool = False) -> None:
+async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_thread_id: int | None = None) -> None:
     chat_id = update.effective_chat.id
 
     # Extract thread_id if inside a supergroup topic
@@ -167,10 +168,11 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
     )
 
     # Configure thread_id where the automatic summary will be sent in
-    send_thread_id = thread_id if not is_automatic and not target_thread_id else target_thread_id
+    send_thread_id = target_thread_id if target_thread_id is not None else thread_id
 
-    # Obtain task key
-    task_key = (chat_id, send_thread_id)
+    # Make chat_id and thread_id hashable primitives
+    chat_id = int(chat_id)
+    send_thread_id = int(send_thread_id) if send_thread_id is not None else None
 
     # Included parameters
     hours = 24.0 # Default is 1 day, time parameter counted in hours (3 days == 72 hours)
@@ -196,7 +198,7 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
         try:
             hours = float(context.args[0]) # Parameter can arrive in any format (integer or decimal)
             if (hours > 72.0 or hours <= 0.0):
-                await status_msg.edit_text(
+                await update.message.reply_text(
                 "Invalid time range. Please input within range 0-72 hours."
                 )
                 return
@@ -204,13 +206,13 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
             if len(context.args) >= 2:
                 topic = " ".join(context.args[1:])
         except ValueError:
-            await status_msg.edit_text(
+            await update.message.reply_text(
                 "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
             )
             return
 
     # Processing message sent, waiting for summary processing completion to edit its own message.
-    if update and update.message:
+    if (update and update.message) and not target_thread_id:
         status_msg = await update.message.reply_text("⏳ Processing...", reply_markup=keyboard)
     else:
         status_msg = await context.bot.send_message(
@@ -219,6 +221,10 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
             text="⏳ Processing...",
             reply_markup=keyboard
         )
+
+    message_id = status_msg.message_id
+    # Obtain task key
+    task_key = (chat_id, message_id)
 
     async def summary_task():
         messages, prompt, file_url, link = create_messageThread(chat_id, hours, thread_id, topic)
@@ -309,6 +315,12 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     current_thread_id = update.message.message_thread_id
 
+    thread_id = (
+        update.effective_message.message_thread_id
+        if update.effective_chat.type == "supergroup"
+        else None
+    )
+
     member = await context.bot.get_chat_member(chat.id, user.id)
     if member.status not in ["administrator", "creator"]:
         await update.message.reply_text("⛔ Only group administrators can configure summary settings.")
@@ -317,7 +329,7 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     VALID_SUBCOMMANDS = ["enable", "disable", "topic", "here", "default"]
     subcommand = context.args[0].lower() if context.args else "topic"
 
-    settings = db.get_chat_settings(chat.id)
+    settings = db.get_chat_settings(chat.id, thread_id)
     is_enabled = settings.get("is_enabled")
 
     if subcommand not in VALID_SUBCOMMANDS:
@@ -376,7 +388,7 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # --- Disable summaries (Preserves target topic) ---
         if subcommand == "disable":
             db.update_chat_settings(chat.id, is_enabled=False)
-            settings = db.get_chat_settings(chat.id)
+            settings = db.get_chat_settings(chat.id, thread_id)
             is_enabled = settings.get("is_enabled")
             await update.message.reply_text(
                 "🔕 **Automatic summaries disabled.** Your target topic setting has been saved. Type `/config enable` to resume.",
@@ -550,24 +562,23 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         # ACTIVITY-BASED TRIGGER SECTION HERE
 
         chat_status = db.get_or_create_chat_metadata(chat_id, thread_id)
-        is_enabled = chat_status["is_enabled"]
-        summary_thread_id = chat_status["summary_thread_id"]
+        is_enabled = chat_status.get("is_enabled")
         current_count = db.increment_message_count(chat_id, thread_id)
-        current_count = current_count["message_count"]
+        current_count = current_count.get("message_count")
 
         if is_enabled:
             logger.info(
-                f"Logged message {chat_status["message_count"]}/{COUNTER_THRESHOLD} "
+                f"Logged message {current_count}/{COUNTER_THRESHOLD} "
                 f"for chat {chat_id} ({chat_type}, thread: {thread_id})"
             )
             # Check if threshold reached and automated summaries are active
-            if chat_status["message_count"] >= COUNTER_THRESHOLD:
-                # If summary_thread_id is set -> scenario 2
-                # If summary_thread_id is NULL -> scenario 1 (use active thread_id)
-                target_thread_id = summary_thread_id if summary_thread_id is not None else thread_id
+            if current_count >= COUNTER_THRESHOLD:
+                chat_setting = db.get_chat_settings(chat_id, thread_id) # returns dict
+                target_thread_id = chat_setting.get("summary_thread_id") if chat_setting else None # returns int
+                print(target_thread_id)
 
                 # Pass target_thread_id into summarize
-                asyncio.create_task(summarize(update, context, target_thread_id=target_thread_id, is_automatic=True))
+                asyncio.create_task(summarize(update, context, target_thread_id=target_thread_id))
 
                 # Reset message counter
                 db.reset_message_count(chat_id, thread_id)

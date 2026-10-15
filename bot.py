@@ -23,6 +23,7 @@ from summarizer import summarizeLLMtool, checkForTopic
 
 # Timeout check
 import asyncio
+from collections import defaultdict
 
 # Convert local path of images to Base64 URIs
 from imgStorage import safe_upload_image
@@ -60,6 +61,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Add me to a group chat, and I'll keep track of your conversations and extract key highlights!\n\n"
         "ℹ️ *Disclaimer: Summaries only cover chat activity within the past 72 hours or 200 new messages.*\n\n"
         "──────────────────────\n"
+        "🤖 **AUTOMATIC SUMMARIES**\n"
+        "Once a chat reaches **200 messages**, I'll automatically wait for a quiet 5-minute stretch in the conversation before generating and posting a clean summary—ensuring you never get cut off mid-convo!\n\n"
         "📌 **COMMANDS & USAGE**\n\n"
         "⚡ **`/summarize`** `[hours]` `[topic (optional)]`\n"
         "Generate an instant summary within a specific timeframe (in hours, e.g., `2` or `1.5`) and optional target topic.\n\n"
@@ -407,6 +410,34 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             )
             return
 
+# Dictionary to store active debounce tasks: {(chat_id, thread_id): asyncio.Task}
+active_debounce_tasks = defaultdict(dict)
+
+async def delayed_summary_trigger(update, context, chat_id, thread_id, target_thread_id, delay_seconds=300):
+    """Waits for a quiet stretch (default 5 minutes) before finally calling summarize."""
+    try:
+        # Wait out the quiet period
+        await asyncio.sleep(delay_seconds)
+        
+        # Check if still pending or if new messages reset it
+        if db.get_pending_summary(chat_id, thread_id):
+            logger.info(f"Quiet stretch reached for chat {chat_id} (thread {thread_id}). Generating summary.")
+            
+            # Clear pending state and reset counter in DB
+            db.set_pending_summary(chat_id, False, thread_id)
+            db.reset_message_count(chat_id, thread_id)
+            
+            # Trigger your existing summary generation logic
+            await summarize(update, context, target_thread_id=target_thread_id)
+            
+    except asyncio.CancelledError:
+        # Task was cancelled because a new message came in during the window (resetting the timer)
+        pass
+    finally:
+        # Clean up task reference
+        if (chat_id, thread_id) in active_debounce_tasks:
+            active_debounce_tasks[chat_id].pop(thread_id, None)
+
 async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Buffers every text message in a group chat for later summarization."""
     # Ignore non-message updates, stickers, or messages without any text/caption content
@@ -586,13 +617,18 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             if current_count >= COUNTER_THRESHOLD:
                 chat_setting = db.get_chat_settings(chat_id, thread_id) # returns dict
                 target_thread_id = chat_setting.get("summary_thread_id") if chat_setting else None # returns int
-                print(target_thread_id)
 
-                # Pass target_thread_id into summarize
-                asyncio.create_task(summarize(update, context, target_thread_id=target_thread_id))
-
-                # Reset message counter
-                db.reset_message_count(chat_id, thread_id)
+                db.set_pending_summary(chat_id, True, thread_id)
+        
+                # 3. Debounce Logic: Cancel any existing active timer for this chat/thread
+                if thread_id in active_debounce_tasks[chat_id]:
+                    active_debounce_tasks[chat_id][thread_id].cancel()
+                    
+                # 4. Schedule a new timer (e.g., 300 seconds = 5 minutes of quiet time)
+                task = asyncio.create_task(
+                    delayed_summary_trigger(update, context, chat_id, thread_id, target_thread_id=target_thread_id, delay_seconds=300)
+                )
+                active_debounce_tasks[chat_id][thread_id] = task
 
     except Exception as e:
         logger.error(f"Failed to log message: {e}")
@@ -621,6 +657,8 @@ async def new_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 "Add me to a group chat, and I'll keep track of your conversations and extract key highlights!\n\n"
                 "ℹ️ *Disclaimer: Summaries only cover chat activity within the past 72 hours or 200 new messages.*\n\n"
                 "──────────────────────\n"
+                "🤖 **AUTOMATIC SUMMARIES**\n"
+                "Once a chat reaches **200 messages**, I'll automatically wait for a quiet 5-minute stretch in the conversation before generating and posting a clean summary—ensuring you never get cut off mid-convo!\n\n"
                 "📌 **COMMANDS & USAGE**\n\n"
                 "⚡ **`/summarize`** `[hours]` `[topic (optional)]`\n"
                 "Generate an instant summary within a specific timeframe (in hours, e.g., `2` or `1.5`) and optional target topic.\n\n"

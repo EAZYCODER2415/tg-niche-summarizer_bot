@@ -89,6 +89,7 @@ def init_db():
                     is_enabled BOOLEAN DEFAULT FALSE,
                     message_count INTEGER,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    pending_summary BOOLEAN DEFAULT FALSE
                 )
                 """
             )
@@ -125,6 +126,7 @@ def init_db():
                     is_enabled BOOLEAN DEFAULT FALSE,
                     message_count INTEGER,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    pending_summary BOOLEAN DEFAULT FALSE
                 )
                 """
             )
@@ -433,3 +435,26 @@ def reset_message_count(chat_id: int, thread_id: int | None = None) -> None:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(query, (chat_id, thread_id))
+
+def get_pending_summary(chat_id: int, thread_id: int | None = None) -> bool:
+    """Resets the message counter back to zero after generating a summary."""
+    query = """
+        SELECT pending_summary
+        FROM chat_metadata
+        WHERE chat_id = %s AND AND COALESCE(thread_id, -1) = COALESCE(%s, -1)
+        LIMIT 1;
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(query, (chat_id, thread_id))
+
+def set_pending_summary(chat_id: int, is_pending: bool, thread_id: int | None = None) -> None:
+    """Sets the boolean value of pending_summary according to update."""
+    query = """
+        UPDATE chat_metadata 
+        SET is_pending = %s, updated_at = CURRENT_TIMESTAMP 
+        WHERE chat_id = %s AND COALESCE(thread_id, -1) = COALESCE(%s, -1);
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(query, (is_pending, chat_id, thread_id))

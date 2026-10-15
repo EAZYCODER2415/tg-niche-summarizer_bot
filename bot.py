@@ -433,7 +433,6 @@ async def delayed_summary_trigger(update, context, chat_id, thread_id, target_th
     except asyncio.CancelledError:
         # Task was cancelled because a new message came in during the window (resetting the timer)
         logger.info("CanceledError exception raised. Aborted pending summary..")
-        db.set_pending_summary(chat_id, False, thread_id)
         raise
     finally:
         # Clean up task reference

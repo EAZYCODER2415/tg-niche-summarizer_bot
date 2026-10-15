@@ -360,7 +360,7 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if subcommand == "enable":
             db.update_chat_settings(chat.id, is_enabled=True)
             await update.message.reply_text(
-                f"🔔 **Automatic summaries re-enabled!** Type `/config disable` to undo this action if needed.",
+                "🔔 **Automatic summaries re-enabled!** Type `/config disable` to undo this action if needed.",
                 parse_mode="Markdown"
             )
             return
@@ -371,7 +371,7 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 if current_thread_id:
                     db.update_chat_settings(chat.id, summary_thread_id=current_thread_id)
                     await update.message.reply_text(
-                        f"✅ **Automatic summary destination set!**\nThey will now be posted to this topic thread.",
+                        "✅ **Automatic summary destination set!**\nThey will now be posted to this topic thread.",
                         message_thread_id=current_thread_id,
                         parse_mode="Markdown"
                     )
@@ -379,7 +379,7 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     # --- Set to default ---
                     db.update_summary_thread(chat.id, summary_thread_id=None, is_enabled=True)
                     await update.message.reply_text(
-                        f"🔄 **Reset to Default.** Automatic summaries will post in whichever topic reaches the threshold.",
+                        "🔄 **Reset to Default.** Automatic summaries will post in whichever topic reaches the threshold.",
                         parse_mode="Markdown"
                     )
 
@@ -387,12 +387,12 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             elif subcommand == "default":
                 db.update_chat_settings(chat.id, summary_thread_id=None)
                 await update.message.reply_text(
-                    f"🔄 **Reset to Default.** Automatic summaries will post in whichever topic reaches the threshold.",
+                    "🔄 **Reset to Default.** Automatic summaries will post in whichever topic reaches the threshold.",
                     parse_mode="Markdown"
                 )
         else:
             await update.message.reply_text(
-                f"⚠️ **Error:** Automatic summary must be enabled to proceed.",
+                "⚠️ **Error:** Automatic summary must be enabled to proceed.",
                 parse_mode="Markdown"
             )
 

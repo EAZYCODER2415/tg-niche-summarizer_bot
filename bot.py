@@ -420,7 +420,8 @@ async def delayed_summary_trigger(update, context, chat_id, thread_id, target_th
         await asyncio.sleep(delay_seconds)
         
         # Check if still pending or if new messages reset it
-        if db.get_pending_summary(chat_id, thread_id):
+        pending_summary = db.get_pending_summary(chat_id, thread_id)
+        if pending_summary.get("pending_summary"):
             logger.info(f"Quiet stretch reached for chat {chat_id} (thread {thread_id}). Generating summary.")
             
             # Clear pending state and reset counter in DB

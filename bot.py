@@ -36,7 +36,8 @@ from telegram.ext import (
     ContextTypes,
     filters,
     AIORateLimiter,
-    CallbackQueryHandler
+    CallbackQueryHandler,
+    ChatMemberHandler
 )
 
 # Log of bot status while running background checks (INFO, WARNING, ERROR) 
@@ -54,16 +55,26 @@ active_summary_tasks: dict[tuple[int, int | None], asyncio.Task] = {}
 
 # --- Handlers ----------------------------------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    text = (
+        "👋 **Hi! I'm your automated group summary bot.**\n"
+        "Add me to a group chat, and I'll keep track of your conversations and extract key highlights!\n\n"
+        "ℹ️ *Disclaimer: Summaries only cover chat activity within the past 72 hours or 200 new messages.*\n\n"
+        "──────────────────────\n"
+        "📌 **COMMANDS & USAGE**\n\n"
+        "⚡ **`/summarize`** `[hours]` `[topic (optional)]`\n"
+        "Generate an instant summary within a specific timeframe (in hours, e.g., `2` or `1.5`) and optional target topic.\n\n"
+        "📎 **File Tagging**\n"
+        "Include `#summarize` in file or media captions so I parse them into summary data!\n\n"
+        "⚙️ **`/config`** `[setting]`\n"
+        "Manage automatic summary settings for your chat:\n"
+        "• `/config topic/here` — Route automated summaries to the current topic\n"
+        "• `/config default` — Reset routing to default\n"
+        "• `/config enable` — Turn on automatic threshold summaries\n"
+        "• `/config disable` — Turn off automatic threshold summaries"
+    )
+
     await update.message.reply_text(
-        f"Hi! I'm your group summary bot. Add me to a chat and I'll start keeping track of the conversation.\n\n"
-        f"**`/summarize`** **[time (in hrs)] [[topic (str format)]]**:\nSummarize a conversation within given time parameter (calculated in hours) and topic parameter.\n"
-        f"REMARKS: Hours in either integers or decimals are acceptable.\n\n"
-        f"When sending messages with attachments, add a #summarize tag to include them inside the summary data.\n\n"
-        f"**`/config [param]`**:\nConfigure automatic summary settings to customize the group's experience.\n"
-        f"• `/config topic/here` - Set summary target to current topic\n"
-        f"• `/config default` - Set to default routing\n"
-        f"• `/config enable` - Re-enable automatic summaries\n"
-        f"• `/config disable` - Disable automatic summaries\n",
+        text,
         parse_mode="Markdown"
     )
     return
@@ -586,6 +597,49 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     except Exception as e:
         logger.error(f"Failed to log message: {e}")
 
+# Handler for getting added to new chats
+async def new_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Detects when the bot is added to a new chat and sends the /start message automatically."""
+    result = update.chat_member
+    if not result:
+        return
+
+    # Check if the change applies to the bot itself
+    bot_user = await context.bot.get_me()
+    if result.new_chat_member.user.id == bot_user.id:
+        # Check if status changed from 'left' or 'restricted' to 'member' or 'administrator'
+        old_status = result.old_chat_member.status
+        new_status = result.new_chat_member.status
+        active_statuses = ["member", "administrator"]
+        
+        if new_status in active_statuses and old_status not in active_statuses:
+            chat = update.effective_chat
+            
+            # Send the exact same text/formatting as your /start command
+            text = (
+                "👋 **Hi! I'm your automated group summary bot.**\n"
+                "Add me to a group chat, and I'll keep track of your conversations and extract key highlights!\n\n"
+                "ℹ️ *Disclaimer: Summaries only cover chat activity within the past 72 hours or 200 new messages.*\n\n"
+                "──────────────────────\n"
+                "📌 **COMMANDS & USAGE**\n\n"
+                "⚡ **`/summarize`** `[hours]` `[topic (optional)]`\n"
+                "Generate an instant summary within a specific timeframe (in hours, e.g., `2` or `1.5`) and optional target topic.\n\n"
+                "📎 **File Tagging**\n"
+                "Include `#summarize` in file or media captions so I parse them into summary data!\n\n"
+                "⚙️ **`/config`** `[setting]`\n"
+                "Manage automatic summary settings for your chat:\n"
+                "• `/config topic/here` — Route automated summaries to the current topic\n"
+                "• `/config default` — Reset routing to default\n"
+                "• `/config enable` — Turn on automatic threshold summaries\n"
+                "• `/config disable` — Turn off automatic threshold summaries"
+            )
+
+            await context.bot.send_message(
+                chat_id=chat.id,
+                text=text,
+                parse_mode="Markdown"
+            )
+
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     """Log errors caused by updates."""
@@ -652,6 +706,9 @@ def main() -> None:
             log_message
         )
     )
+
+    # Detect an event in which the bot is added into a new chat, sending /start into the chat.
+    application.add_handler(ChatMemberHandler(new_chat_handler, ChatMemberHandler.MY_CHAT_MEMBER))
 
     # Add a callback Cancel button for the summarize command
     application.add_handler(CallbackQueryHandler(cancel_callback_handler, pattern="^cancel_summary$"))

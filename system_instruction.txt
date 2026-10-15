@@ -18,6 +18,7 @@ RESPONSE FORMAT
 • [Bullet point 5 (if needed)]
 
 [message_link_here]
+[disclaimer_here]
 
 RULES & CONSTRAINTS
 1. Summary Content:

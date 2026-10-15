@@ -421,7 +421,7 @@ async def delayed_summary_trigger(update, context, chat_id, thread_id, target_th
         
         # Check if still pending or if new messages reset it
         pending_summary = db.get_pending_summary(chat_id, thread_id)
-        logger.info(f"Pending check result: {pending_summary}")
+        logger.info(f"Pending check result: {pending_summary}.")
         if pending_summary:
             logger.info(f"Quiet stretch reached for chat {chat_id} (thread {thread_id}). Generating summary.")
             
@@ -433,7 +433,7 @@ async def delayed_summary_trigger(update, context, chat_id, thread_id, target_th
             await summarize(update, context, target_thread_id=target_thread_id)
     except asyncio.CancelledError:
         # Task was cancelled because a new message came in during the window (resetting the timer)
-        logger.info("CanceledError exception raised. Aborted pending summary..")
+        logger.info(f"CanceledError exception raised. Aborted pending summary..")
         raise
     finally:
         # Clean up task reference

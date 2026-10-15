@@ -421,7 +421,8 @@ async def delayed_summary_trigger(update, context, chat_id, thread_id, target_th
         
         # Check if still pending or if new messages reset it
         pending_summary = db.get_pending_summary(chat_id, thread_id)
-        if pending_summary.get("pending_summary"):
+        logger.info(f"Pending check result: {pending_summary}")
+        if pending_summary:
             logger.info(f"Quiet stretch reached for chat {chat_id} (thread {thread_id}). Generating summary.")
             
             # Clear pending state and reset counter in DB
@@ -437,7 +438,7 @@ async def delayed_summary_trigger(update, context, chat_id, thread_id, target_th
     finally:
         # Clean up task reference
         if (chat_id, thread_id) in active_debounce_tasks and thread_id in active_debounce_tasks[chat_id]:
-            active_debounce_tasks[chat_id].pop(thread_id, None)
+            del active_debounce_tasks[chat_id][thread_id]
 
 async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Buffers every text message in a group chat for later summarization."""

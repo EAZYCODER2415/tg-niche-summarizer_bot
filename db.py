@@ -441,14 +441,14 @@ def get_pending_summary(chat_id: int, thread_id: int | None = None) -> bool:
     query = """
         SELECT pending_summary, updated_at
         FROM chat_metadata
-        WHERE chat_id = %s AND AND COALESCE(thread_id, -1) = COALESCE(%s, -1)
+        WHERE chat_id = %s AND COALESCE(thread_id, -1) = COALESCE(%s, -1)
         LIMIT 1;
     """
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(query, (chat_id, thread_id))
         row = cursor.fetchone()
-        return row
+        return row["pending_summary"]
 
 def set_pending_summary(chat_id: int, is_pending: bool, thread_id: int | None = None) -> None:
     """Sets the boolean value of pending_summary according to update."""

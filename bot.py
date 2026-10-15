@@ -430,13 +430,14 @@ async def delayed_summary_trigger(update, context, chat_id, thread_id, target_th
             
             # Trigger your existing summary generation logic
             await summarize(update, context, target_thread_id=target_thread_id)
-            
     except asyncio.CancelledError:
         # Task was cancelled because a new message came in during the window (resetting the timer)
-        pass
+        logger.info("CanceledError exception raised. Aborted pending summary..")
+        db.set_pending_summary(chat_id, False, thread_id)
+        raise
     finally:
         # Clean up task reference
-        if (chat_id, thread_id) in active_debounce_tasks:
+        if (chat_id, thread_id) in active_debounce_tasks and thread_id in active_debounce_tasks[chat_id]:
             active_debounce_tasks[chat_id].pop(thread_id, None)
 
 async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -620,16 +621,18 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 target_thread_id = chat_setting.get("summary_thread_id") if chat_setting else None # returns int
 
                 db.set_pending_summary(chat_id, True, thread_id)
-        
+
                 # 3. Debounce Logic: Cancel any existing active timer for this chat/thread
                 if thread_id in active_debounce_tasks[chat_id]:
                     active_debounce_tasks[chat_id][thread_id].cancel()
-                    
+                logger.info("Cleared active automatic summaries from the above chat")
+
                 # 4. Schedule a new timer (e.g., 300 seconds = 5 minutes of quiet time)
                 task = asyncio.create_task(
                     delayed_summary_trigger(update, context, chat_id, thread_id, target_thread_id=target_thread_id, delay_seconds=300)
                 )
                 active_debounce_tasks[chat_id][thread_id] = task
+                logger.info("Initiated new automatic summary task, timed at 5 minutes.")
 
     except Exception as e:
         logger.error(f"Failed to log message: {e}")

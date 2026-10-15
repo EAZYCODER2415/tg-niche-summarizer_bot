@@ -88,7 +88,7 @@ def init_db():
                     summary_thread_id BIGINT,
                     is_enabled BOOLEAN DEFAULT FALSE,
                     message_count INTEGER,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     pending_summary BOOLEAN DEFAULT FALSE
                 )
                 """
@@ -125,7 +125,7 @@ def init_db():
                     summary_thread_id BIGINT,
                     is_enabled BOOLEAN DEFAULT FALSE,
                     message_count INTEGER,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     pending_summary BOOLEAN DEFAULT FALSE
                 )
                 """

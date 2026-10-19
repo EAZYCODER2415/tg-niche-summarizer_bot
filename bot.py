@@ -757,7 +757,7 @@ def main() -> None:
     )
 
     # Detect an event in which the bot is added into a new chat, sending /start into the chat.
-    application.add_handler(ChatMemberHandler(new_chat_handler, ChatMemberHandler.MY_CHAT_MEMBER))
+    application.add_handler(ChatMemberHandler(new_chat_handler, ChatMemberHandler.CHAT_MEMBER))
 
     # Add a callback Cancel button for the summarize command
     application.add_handler(CallbackQueryHandler(cancel_callback_handler, pattern="^cancel_summary$"))

@@ -192,15 +192,16 @@ def get_messages(chat_id: int, thread_id:int=None, since:str=None, hours:float=N
             params.append(int(thread_id))
             
         if since is not None:
+            latest_dt = None
             if isinstance(since, str):
                 latest_dt = datetime.fromisoformat(since)
             else:
                 latest_dt = since
-
-            thread_clause += f" AND timestamp <= {placeholder}"
-            params.append(latest_dt)
+            if latest_dt:
+                thread_clause += f" AND timestamp <= {placeholder}"
+                params.append(latest_dt)
             
-        if hours is not None:
+        if hours is not None and latest_dt is not None:
             cutoff_dt = latest_dt - timedelta(hours=hours) # has T and is a datetime object
             thread_clause += f" AND timestamp >= {placeholder}"
             params.append(cutoff_dt)

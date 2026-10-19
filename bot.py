@@ -738,6 +738,7 @@ def main() -> None:
         .token(token)
         .rate_limiter(AIORateLimiter(overall_max_rate=30, group_max_rate=20))
         .post_init(post_init)
+        .read_timeout(30).write_timeout(30)
         .build()
     )
 

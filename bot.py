@@ -675,12 +675,17 @@ async def new_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 "• `/config enable` — Turn on automatic threshold summaries\n"
                 "• `/config disable` — Turn off automatic threshold summaries"
             )
+            try:
+                await context.bot.send_message(
+                    chat_id=chat.id,
+                    text=text,
+                    parse_mode="Markdown"
+                )
+                logger.info(f"Sent automatic welcome message to new chat {chat.id}")
+            except Exception as e:
+                logger.error(f"Failed to send welcome message: {e}")
 
-            await context.bot.send_message(
-                chat_id=chat.id,
-                text=text,
-                parse_mode="Markdown"
-            )
+        return
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):

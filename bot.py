@@ -522,9 +522,9 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if update.effective_chat.username:
         # Public group/channel
         link = f"https://t.me/{update.effective_chat.username}/{update.message.message_id}"
-    elif str(chat_id).startswith("-100"):
-        # Private supergroup
-        clean_chat_id = str(chat_id)[4:]
+    elif chat_type in ["group", "supergroup"]:
+        # Private group or supergroup (handles IDs with or without -100)
+        clean_chat_id = str(chat_id).replace("-100", "").replace("-", "")
         link = f"https://t.me/c/{clean_chat_id}/{update.message.message_id}"
 
     try:

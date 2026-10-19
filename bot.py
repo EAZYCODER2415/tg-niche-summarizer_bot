@@ -518,6 +518,7 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             file_size = None
 
     # Get link from message
+    link = None
     if update.effective_chat.username:
         # Public group/channel
         link = f"https://t.me/{update.effective_chat.username}/{update.message.message_id}"

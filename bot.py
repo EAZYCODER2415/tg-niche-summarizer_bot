@@ -82,8 +82,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Submit feedback or bug reports to TLDRFlow admin via direct message.\n\n"
     )
 
+    # Inline button pointing directly to your GitHub repo
+    keyboard = [
+        [InlineKeyboardButton("🐙 View Open-Source Project", url="https://github.com/EAZYCODER2415/tldr-bot-telegram")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     await update.message.reply_text(
         text,
+        reply_markup=reply_markup,
         parse_mode="Markdown"
     )
     return

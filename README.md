@@ -57,19 +57,18 @@ We take user privacy seriously. Please review how TLDRFlow handles data:
 ### Installation
 
 1. **Clone the repository:**
-   <pre><code class="language-bash">git clone https://github.com/EAZYCODER2415/tldr-bot-telegram.git
+<pre><code class="language-bash">git clone https://github.com/EAZYCODER2415/tldr-bot-telegram.git
 cd tldr-bot-telegram</code></pre>
 
 2. **Install Dependencies**
 <pre><code class="language-bash">pip install -r requirements.txt</code></pre>
 
 3. **Configure Environment Variables**
-<pre><code class="language-bash">
-    TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
-    OPENROUTER_API_KEY=your_openrouter_api_key_here
+<pre><code class="language-bash">TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here
 </code></pre>
 
-4. **Run the Bot**
+5. **Run the Bot**
 <pre><code class="language-bash">python main.py</code></pre>
 
 ---

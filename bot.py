@@ -268,10 +268,11 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
                 # Automatically update your database metadata to clear the dead thread ID
                 await db.update_chat_settings(chat_id, None, True)
                 return
-        
-    else:
-        # Log other unexpected Telegram errors normally
-        logger.error(f"Failed to send summary due to Telegram error: {e}")
+            return
+        else:
+            # Log other unexpected Telegram errors normally
+            logger.error(f"Failed to send summary due to Telegram error: {e}")
+            return
 
     async def summary_task():
         # Calculate the timestamp threshold based on the 'hours' lookback parameter
@@ -702,7 +703,7 @@ async def new_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     # Statuses indicating the bot has been removed, kicked, or left
     if new_status in ["left", "kicked"]:
         logger.info(f"Bot was removed/kicked from chat {chat_id} ({chat.title}). Cleaning up metadata.")
-        logger.info("⏰ JobQueue trigger fired! Running cleanup_database...")
+        
         # Call your database function to clear or delete the chat metadata
         db.remove_chat_metadata(chat_id)
         # Purge old messages for that chat if you want a complete wipe

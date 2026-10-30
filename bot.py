@@ -80,6 +80,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Configure bot's output language (auto or empty params for detect language).\n\n"
         "🚩 **`/report`**\n"
         "Submit feedback or bug reports to TLDRFlow admin via direct message.\n\n"
+        "🔒 **All messages and chat data are encrypted**"
     )
 
     # Inline button pointing directly to your GitHub repo
@@ -560,7 +561,7 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     # Get link from message
     link = None
-    if update.effective_chat.username and chat_type is not "private":
+    if update.effective_chat.username and chat_type not in ["private"]:
         # Public group/channel
         link = f"https://t.me/{update.effective_chat.username}/{update.message.message_id}"
     elif chat_type in ["group", "supergroup"]:

@@ -1,101 +1,102 @@
-# 🦁 SMU Niche Summarizer (prototype in progress)
-⭐ Star this repo if you find it useful ⭐
+# TLDRFlow 🚀🤖
 
-**Repository Owner:** Pongsavaruth Vorajayudhbong
+<p align="left">
+  <strong>An intelligent, multilingual Telegram group chat summarizer powered by LLMs via OpenRouter. Never miss a conversation context again.</strong>
+</p>
 
-## 💡 Introduction
+<p align="left">
 
-How many times have you opened a Telegram group chat to 200 unread pings and just given up? And what's more, felt pressured to catch up on whatever the group is discussing or plotting?
+  ![Python](https://img.shields.io/badge/python-3670A0?style=flat&logo=python&logoColor=ffdd54)
+  ![SQLite](https://img.shields.io/badge/SQLite-4169E1?logo=sqlite&logoColor=fff&style=plastic)
 
-This project aims to ease **FOMO, burnout, isolation, and information overload** for incoming university students. It's a Python-based Telegram bot that summarizes conversations in seconds using LLM processing.
+</p>
 
-It started as a personal project for a small SMU (Singapore Management University) group chat, and doubles as a first experiment with the `python-telegram-bot` API and LLM APIs in Python.
+---
+
+## 📖 Overview
+
+**TLDRFlow** is a lightweight, high-performance Telegram bot designed to solve information overload in active university, club, and project group chats. Instead of scrolling through hundreds of missed messages, users can instantly generate structured, context-aware summaries covering multi-lingual discussions (English, Chinese, Japanese, and Tamil).
+
+---
+
+## ✨ Key Features
+
+- **Instant Summarization:** Summarize active conversation logs instantly on demand from slash command.
+- **Multilingual Summarization:** Native support for processing and summarizing cross-lingual conversations seamlessly.
+- **Smart Flat-Timeline Logging:** Captures messages, captions, and attachments into a robust SQLite backing store.
+- **Private Message (PM) & Language Customization:** Configure bot preferences and interact via private chats or specific language commands (`/lang`).
+- **Robust Error Handling:** Automatic fallbacks for Markdown parsing errors and built-in safety guardrail management.
+
+---
 
 ## 🛠️ Tech Stack
 
-**Language:**
-- ![Python](https://img.shields.io/badge/python-3670A0?style=flat&logo=python&logoColor=ffdd54)
-- ![MySQL](https://img.shields.io/badge/MySQL-4479A1?style=flat&logo=mysql&logoColor=white)
+- **Language:** Python
+- **Framework:** `python-telegram-bot`
+- **Database:** SQLite
+- **LLM Gateway:** OpenRouter (<abbr title="Application Programming Interface">API</abbr>) utilizing advanced Qwen models.
 
-**APIs:**
-- python-telegram-bot
-- Claude or Qwen
+---
 
-**Pipeline:** Telegram → LLM → Telegram
+## 🔒 Privacy & Data Transparency
 
-## ✨ Key Features
-*Subject to change — currently under discussion.*
+We take user privacy seriously. Please review how TLDRFlow handles data:
+- **What is collected:** Group message text contents, timestamps, sender usernames, and attachment indicators are logged to maintain chronological chat flow for summarization.
+- **Where it goes:** Recent message logs are processed transiently through third-party LLM providers (via OpenRouter) strictly to generate the requested summary. 
+- **Storage & Retention:** Data is stored locally in an encrypted or standard SQLite instance. No message logs are monetized, sold, or shared with advertisers. Group admins retain full authority over adding or removing the bot.
 
-| Feature | Options |
-|---|---|
-| 🔔 **Trigger** | Command-based (user types the `/summarize` command), or Activity-based (auto-triggers after 50+ unread messages) |
-| 📋 **Format** | TL;DR — 3 to 5 bullet points covering major decisions, deadlines, or topics |
-| 🔒 **Privacy & scope** | By default, summarizes text only — media, files, and links are excluded. Messages with attachments are included only if tagged `#summarize` |
+---
 
-| Attachment type | Handling |
-|---|---|
-| 🖼️ **Images** (png, jpg, jpeg) | Compressed before being sent to the LLM API |
-| 📄 **Documents** (pdf, docx, etc.) | Filename only, content omitted |
-| 🎬 **Audio/video** (mp3, mp4, etc.) | Not yet decided |
+## 🚀 Getting Started (Self-Hosting)
 
-*(Based on poll results and suggestions among collaborators.)*
+### Prerequisites
+- Python 3.10 or higher
+- A Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
+- An OpenRouter API Key
 
-## ⚙️ Usage
-The bot mainly runs on **TWO** commands:
-1. `/start` → shows an intro and usage guide.
-2. `/summarize` → the core command. Takes **TWO** parameters:
+### Installation
 
-    - `time` &ensp;→ hours to look back (max 72)
-    - `topic` → a string in quotation marks
+1. **Clone the repository:**
+   <pre><code class="language-bash">git clone https://github.com/EAZYCODER2415/tldr-bot-telegram.git
+cd tldr-bot-telegram</code></pre>
 
-**Automatic logging:** the bot also runs `/summarize` on itself once a set number of new messages (e.g. 50) have piled up since the last summary.
+2. **Install Dependencies**
+<pre><code class="language-bash">pip install -r requirements.txt</code></pre>
 
-## 🤝 Get Involved
-This is an open-collaboration project — built by students, for students, as a space to actually learn Python, bots, and LLM integration by doing.
+3. **Configure Environment Variables**
+<pre><code class="language-bash">
+    TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+    OPENROUTER_API_KEY=your_openrouter_api_key_here
+</code></pre>
 
-To join, message [@StealrunNshoot](https://t.me/StealrunNshoot) on Telegram with:
-1. Your GitHub username
-2. Your preferred role(s)
-3. A sentence or two on what you want to get out of contributing
+4. **Run the Bot**
+<pre><code class="language-bash">python main.py</code></pre>
 
-No formal application, no gatekeeping on experience — but you should be able to explain your own code. PRs that are clearly copy-pasted without understanding won't be taken seriously.
+---
 
-### Roles
+## 📋 Commands
+- ⚡ **`/tldr`** `[hours]` `[topic (optional)]`:
+Generate an instant summary within a specific timeframe (in hours, e.g., `2` or `1.5`) and optional target topic.
 
-*All coding roles: you should genuinely understand every line you submit, including AI-assisted code — "it works" isn't a substitute for being able to explain it.*
+- 📎 **File Tagging**: Include `#summarize` in file or media captions so the bot parses them into summary data!
 
-| Role | Responsibilities | Requirements |
-|---|---|---|
-| 🎨 **Bot Aesthetic Designer** | Profile picture, icons, welcome page, overall look | Anyone with an eye for design |
-| 🛠️ **Bot Developer** | Python handlers for Telegram events (commands, message logging) | Basic Python (loops, functions) |
-| 🧠 **LLM/Prompt Engineer** | Design and test prompts that turn chat logs into good summaries | Curiosity about AI/LLMs — no ML background needed, but you should understand *why* a prompt works |
-| 🛢️ **Database Helper** | Database queries for storing/retrieving messages | Basic Python; SQL is a bonus |
-| ⚙️ **DevOps** | Hosting, environment variables/secrets, basic CI, crash restarts | Comfortable with the command line; deployment guides provided |
-| 🖌️ **UX/Format Designer** | Decide how summaries should read, test real outputs | Good judgment and meaningful feedback |
-| 📝 **Docs & Onboarding** | Improve the README, setup guides, code comments | Good english, readability and basic formatting knowledge |
-| 🧪 **QA/Tester** | Run the bot in a real chat, find and file bugs | Patience and attention to detail |
-| 🔎 **Reviewer** | Read pull requests, give feedback before merging | Understands basic Python |
+-⚙️ **`/config`** `[setting]`:"
+Manage automatic summary settings for the chat:
 
-### How to Contribute
+• `/config topic/here` — Route automated summaries to the current topic
 
-**Prerequisite**: Have Collaborator access to the repository after position inquiry
+• `/config default` — Reset routing to default
 
-See [CONTRIBUTING.md](https://github.com/EAZYCODER2415/tg-niche-summarizer_bot/blob/main/CONTRIBUTING.md) for full setup instructions, coding conventions, and contribution guidelines.
+• `/config enable` — Turn on automatic threshold summaries
 
-<details>
-  <summary><b>Not sure where to start?</b></summary>
-  
-  Message [@StealrunNshoot](https://t.me/StealrunNshoot) on Telegram and we'll help you get started and clarify any doubts you may have.
-</details>
+• `/config disable` — Turn off automatic threshold summaries
 
-## 📈 Current Work Plan
+- `/lang` — Selects preferred language for generated summaries.
 
-1. Configure the bot: API setup, event calls, message parameters.
-2. Build the LLM pipeline for summarizing text and media by time/topic.
-3. Connect the two into one pipeline: Telegram → LLM → Telegram.
-4. Testing, QA, and revision (longest phase).
-5. Web/server hosting (final step).
+- `/report` — Submits feedback or bug reports securely.
 
-## 📌 Conclusion
+---
 
-Thanks for checking out this repo! Again, do support us by starring the repository. Looking forward to your contributions!
+## 📜 License
+
+Distributed under the MIT License. See LICENSE for more information.

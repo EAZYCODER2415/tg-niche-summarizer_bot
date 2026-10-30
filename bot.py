@@ -548,7 +548,7 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     # Get link from message
     link = None
-    if update.effective_chat.username:
+    if update.effective_chat.username and chat_type is not "private":
         # Public group/channel
         link = f"https://t.me/{update.effective_chat.username}/{update.message.message_id}"
     elif chat_type in ["group", "supergroup"]:
@@ -669,42 +669,26 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 # Handler for getting added to new chats
 async def new_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Detects when the bot is added to a new chat and sends the /start message automatically."""
-    logger.info(f"Sending automatic welcome message to new chat...")
-    # Check if the change applies to the bot itself
-    bot_user = await context.bot.get_me()
-    if any(member.id == bot_user.id for member in update.message.new_chat_members):
-        chat = update.effective_chat
-        # Send the exact same text/formatting as your /start command
-        text = (
-            "👋 **Hi! I'm your automated group summary bot.**\n"
-            "Add me to a group chat, and I'll keep track of your conversations and extract key highlights!\n\n"
-            "ℹ️ *Disclaimer: Summaries only cover chat activity within the past 72 hours or 200 new messages.*\n\n"
-            "──────────────────────\n"
-            "🤖 **AUTOMATIC SUMMARIES**\n"
-            "Once a chat reaches **200 messages**, I'll automatically wait for a quiet 5-minute stretch in the conversation before generating and posting a clean summary—ensuring you never get cut off mid-convo!\n\n"
-            "📌 **COMMANDS & USAGE**\n\n"
-            "⚡ **`/summarize`** `[hours]` `[topic (optional)]`\n"
-            "Generate an instant summary within a specific timeframe (in hours, e.g., `2` or `1.5`) and optional target topic.\n\n"
-            "📎 **File Tagging**\n"
-            "Include `#summarize` in file or media captions so I parse them into summary data!\n\n"
-            "⚙️ **`/config`** `[setting]`\n"
-            "Manage automatic summary settings for your chat:\n"
-            "• `/config topic/here` — Route automated summaries to the current topic\n"
-            "• `/config default` — Reset routing to default\n"
-            "• `/config enable` — Turn on automatic threshold summaries\n"
-            "• `/config disable` — Turn off automatic threshold summaries"
-        )
-        try:
-            await context.bot.send_message(
-                chat_id=chat.id,
-                text=text,
-                parse_mode="Markdown"
-            )
-            logger.info(f"Sent automatic welcome message to new chat {chat.id}")
-        except Exception as e:
-            logger.error(f"Failed to send welcome message: {e}")
+    # Get the chat member update details
+    result = update.my_chat_member
+    if not result:
         return
+
+    chat = result.chat
+    chat_id = chat.id
+    
+    # Check the new status of the bot
+    new_status = result.new_chat_member.status
+    
+    # Statuses indicating the bot has been removed, kicked, or left
+    if new_status in ["left", "kicked"]:
+        logger.info(f"Bot was removed/kicked from chat {chat_id} ({chat.title}). Cleaning up metadata.")
+        logger.info("⏰ JobQueue trigger fired! Running cleanup_database...")
+        # Call your database function to clear or delete the chat metadata
+        db.remove_chat_metadata(chat_id)
+        # Purge old messages for that chat if you want a complete wipe
+        deleted_count = db.purge_chat_messages(chat_id)
+        print(f"[Cleanup] Deleted {deleted_count} messages from chat {chat_id} ({chat.title}).")
     return
 
 
@@ -781,8 +765,8 @@ def main() -> None:
         )
     )
 
-    # Detect an event in which the bot is added into a new chat, sending /start into the chat.
-    application.add_handler(ChatMemberHandler(new_chat_handler, ChatMemberHandler.CHAT_MEMBER))
+    # Detect an event in which the bot is removed from a chat, deleting chat_metadata for all involved.
+    application.add_handler(ChatMemberHandler(new_chat_handler, ChatMemberHandler.MY_CHAT_MEMBER))
 
     # Polling is a mechanism in which the Telegram bot is maintained in activity from detecting updates at all times.
     logger.info("Bot starting (polling mode)...")

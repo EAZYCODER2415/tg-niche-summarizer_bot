@@ -325,6 +325,34 @@ def delete_old_messages(hours: int = 72) -> int:
         conn.commit()
         return deleted_count
 
+def purge_chat_messages(chat_id: int = None) -> int:
+    """Deletes messages older than the specified number of hours."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        # Retrieve timestamp of most recent message
+        since_time = get_latest_message()
+        if not since_time:
+            return 0  # Database is empty
+        
+        # Safely pass latest_dt as a parameter; 'timestamp' is the table column
+        if DATABASE_URL:
+            query = """
+                DELETE FROM messages
+                WHERE chat_id = ?
+            """
+            cursor.execute(query, (int(chat_id),))
+        else:
+            query = """
+                DELETE FROM messages 
+                WHERE chat_id = %s
+            """
+            # Execute deletion
+            cursor.execute(query, (int(chat_id),))
+
+        deleted_count = cursor.rowcount
+        conn.commit()
+        return deleted_count
+
 def mark_as_summarized(message_ids: list[int]) -> int:
     """
     Marks messages as summarized given a list of message IDs.
@@ -462,3 +490,14 @@ def set_pending_summary(chat_id: int, is_pending: bool, thread_id: int | None = 
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(query, (is_pending, chat_id, thread_id))
+
+def remove_chat_metadata(chat_id: int=None) -> None:
+    """Deletes chat metadata upon chat deletion or bot removal (kick or ban)."""
+    update_query = """
+        DELETE FROM messages
+        WHERE chat_id = %s
+        """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(update_query, (chat_id,))
+        return

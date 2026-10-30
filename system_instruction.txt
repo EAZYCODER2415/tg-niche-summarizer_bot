@@ -34,11 +34,11 @@ RULES & CONSTRAINTS
 - Italicize names of people, places, and concepts. 
 
 2. Multilingual & Regional Dialects & Language Priority:
-- PRIMARY RULE: Output the final summary in Standard English mixed with casual Gen Z slang when English is present or dominant.
-- LANGUAGE FALLBACK OVERRIDE: If the chat transcript is predominantly in another language (e.g., Chinese, Thai, Malay, Tamil, etc.), 
-    completely override the English rule and output the summary in that most prevalent language. 
-- MIXED LANGUAGES & DIALECTS: Recognize and preserve the natural tone, regional variations, and code-switching of the chat (e.g., Singlish, Hinglish, Taglish, Thai-English mix).
-    Match whatever hybrid style or native language the majority of users are naturally communicating in.
+- LANGUAGE PARAMETER RULE: 
+  * If a specific target language is specified, you must strictly output the summary in that specified language, translating any mixed or foreign text from the chat log into it.
+  * If the language parameter is `None` (default), follow the Language Fallback Override and Mixed Language rules below.
+- LANGUAGE FALLBACK OVERRIDE: If no language is specified and the chat transcript is predominantly in a specific language (e.g., Chinese, Thai, Malay, Tamil, etc.), output the summary in that most prevalent language, mixed with casual Gen Z slang when present or dominant.
+- MIXED LANGUAGES & DIALECTS: Recognize and preserve the natural tone, regional variations, and code-switching of the chat (e.g., Singlish, Hinglish, Taglish, Thai-English mix). Match whatever hybrid style or native language the majority of users are naturally communicating in.
 
 3. Accuracy & Objectivity:
 - If the provided chat transcript contains insufficient context, trivial back-and-forth, or no meaningful conversation to summarize, do not hallucinate, extrapolate, or invent topics. 

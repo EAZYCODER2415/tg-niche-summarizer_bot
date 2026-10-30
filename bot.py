@@ -75,7 +75,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "• `/config topic/here` — Route automated summaries to the current topic\n"
         "• `/config default` — Reset routing to default\n"
         "• `/config enable` — Turn on automatic threshold summaries\n"
-        "• `/config disable` — Turn off automatic threshold summaries"
+        "• `/config disable` — Turn off automatic threshold summaries\n\n"
+        "🌐 **`/lang`** `[language]`\n"
+        "Configure bot's output language (auto or empty params for detect language).\n\n"
+        "🚩 **`/report`**\n"
+        "Submit feedback or bug reports to TLDRFlow admin via direct message.\n\n"
     )
 
     await update.message.reply_text(
@@ -667,6 +671,14 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     except Exception as e:
         logger.error(f"Failed to log message: {e}")
 
+async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("✨ **Coming soon!**", parse_mode="Markdown")
+    return
+
+async def report_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("✨ **Coming soon!**", parse_mode="Markdown")
+    return
+
 # Handler for getting added to new chats
 async def new_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Get the chat member update details
@@ -754,8 +766,10 @@ def main() -> None:
 
     # Command TREE (command handlers)
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("summarize", summarize))
+    application.add_handler(CommandHandler("tldr", summarize))
     application.add_handler(CommandHandler("config", config))
+    application.add_handler(CommandHandler("lang", language_selection))
+    application.add_handler(CommandHandler("report", report_feedback))
 
     # Catches all non-command text messages (group or private) and buffers them.
     application.add_handler(

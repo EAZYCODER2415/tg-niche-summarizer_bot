@@ -38,8 +38,10 @@ from telegram.ext import (
     filters,
     AIORateLimiter,
     CallbackQueryHandler,
-    ChatMemberHandler
+    ChatMemberHandler,
 )
+
+from telegram.error import TelegramError
 
 # Log of bot status while running background checks (INFO, WARNING, ERROR) 
 logging.basicConfig(
@@ -177,7 +179,7 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
     # Extract thread_id if inside a supergroup topic
     thread_id = (
         update.effective_message.message_thread_id
-        if update.effective_chat.type == "supergroup"
+        if update.effective_chat.type == "supergroup" or update.effective_chat.type == "private"
         else None
     )
 
@@ -197,48 +199,68 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
         [InlineKeyboardButton("❌ Cancel", callback_data="cancel_summary")]
     ])
 
-    # 1. Require parameters: Check if context.args is empty
-    if context and context.args is not None:
-        # User input summarize command without parameters
-        if len(context.args) == 0:
-            missing_param_msg = "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
-            if update and update.message:
-                await update.message.reply_text(missing_param_msg)
-            else:
-                await context.bot.send_message(chat_id=chat_id, message_thread_id=send_thread_id, text=missing_param_msg)
-                return
-
-        # User input summarize command with parameters but incorrect format
-        try:
-            hours = float(context.args[0]) # Parameter can arrive in any format (integer or decimal)
-            if (hours > 72.0 or hours <= 0.0):
+    # Error-handling callback (try...except block) if send_thread_id gets deleted:
+    try:
+        # 1. Require parameters: Check if context.args is empty
+        if context and context.args is not None:
+            # User input summarize command without parameters
+            if len(context.args) == 0:
+                missing_param_msg = "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
+                if update and update.message:
+                    await update.message.reply_text(missing_param_msg)
+                else:
+                    await context.bot.send_message(chat_id=chat_id, message_thread_id=send_thread_id, text=missing_param_msg)
+                    return
+    
+            # User input summarize command with parameters but incorrect format
+            try:
+                hours = float(context.args[0]) # Parameter can arrive in any format (integer or decimal)
+                if (hours > 72.0 or hours <= 0.0):
+                    await update.message.reply_text(
+                    "Invalid time range. Please input within range 0-72 hours."
+                    )
+                    return
+    
+                if len(context.args) >= 2:
+                    topic = " ".join(context.args[1:])
+            except ValueError:
                 await update.message.reply_text(
-                "Invalid time range. Please input within range 0-72 hours."
+                    "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
                 )
                 return
-
-            if len(context.args) >= 2:
-                topic = " ".join(context.args[1:])
-        except ValueError:
-            await update.message.reply_text(
-                "Invalid parameters. Usage: /summarize [numerical hours] [[topic (optional)]]"
+    
+        # Processing message sent, waiting for summary processing completion to edit its own message.
+        if (update and update.message) and not target_thread_id:
+            status_msg = await update.message.reply_text("⏳ Processing...", reply_markup=keyboard)
+        else:
+            status_msg = await context.bot.send_message(
+                chat_id=chat_id,
+                message_thread_id=send_thread_id,
+                text="⏳ Processing...",
+                reply_markup=keyboard
             )
-            return
+    
+        message_id = status_msg.message_id
+        # Obtain task key
+        task_key = (chat_id, message_id)
 
-    # Processing message sent, waiting for summary processing completion to edit its own message.
-    if (update and update.message) and not target_thread_id:
-        status_msg = await update.message.reply_text("⏳ Processing...", reply_markup=keyboard)
+    except TelegramError as e:
+        # Check if the error indicates the thread was deleted or is missing
+        if "thread not found" in str(e).lower() or "not found" in str(e).lower():
+            logger.warning(f"Thread {target_thread_id} in chat {chat_id} was deleted.")
+            
+            isSummarythreadid = db.get_chat_settings(chat_id, send_thread_id)
+            isSummarythreadid = isSummarythreadid.get("summary_thread_id") if isSummarythreadid else None
+
+            if (isSummarythreadid == target_thread_id):
+                logger.error("Resetting summary_thread_id to NULL.")
+                # Automatically update your database metadata to clear the dead thread ID
+                await db.update_chat_settings(chat_id, None, True)
+                return
+        
     else:
-        status_msg = await context.bot.send_message(
-            chat_id=chat_id,
-            message_thread_id=send_thread_id,
-            text="⏳ Processing...",
-            reply_markup=keyboard
-        )
-
-    message_id = status_msg.message_id
-    # Obtain task key
-    task_key = (chat_id, message_id)
+        # Log other unexpected Telegram errors normally
+        logger.error(f"Failed to send summary due to Telegram error: {e}")
 
     async def summary_task():
         # Calculate the timestamp threshold based on the 'hours' lookback parameter
@@ -338,7 +360,7 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     thread_id = (
         update.effective_message.message_thread_id
-        if update.effective_chat.type == "supergroup"
+        if update.effective_chat.type == "supergroup" or update.effective_chat.type == "private"
         else None
     )
 
@@ -460,10 +482,10 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     user = update.message.from_user.username or update.message.from_user.first_name
     timestamp = update.message.date.strftime("%Y-%m-%d %H:%M:%S")
 
-    # Extract thread_id if inside a supergroup topic
+    # Extract thread_id if inside a supergroup topic or private message chat
     thread_id = (
         update.effective_message.message_thread_id
-        if update.effective_chat.type == "supergroup"
+        if update.effective_chat.type == "supergroup" or update.effective_chat.type == "private"
         else None
     )
 

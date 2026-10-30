@@ -59,8 +59,8 @@ active_summary_tasks: dict[tuple[int, int | None], asyncio.Task] = {}
 # --- Handlers ----------------------------------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (
-        "👋 **Hi! I'm your automated group summary bot.**\n"
-        "Add me to a group chat, and I'll keep track of your conversations and extract key highlights!\n\n"
+        "👋 **Hi! I'm your automated chat summary bot.**\n"
+        "Add me to a chat, send messages, and I'll keep track of your conversations and extract key highlights!\n\n"
         "ℹ️ *Disclaimer: Summaries only cover chat activity within the past 72 hours or 200 new messages.*\n\n"
         "──────────────────────\n"
         "🤖 **AUTOMATIC SUMMARIES**\n"

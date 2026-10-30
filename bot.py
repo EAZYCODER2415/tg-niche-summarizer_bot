@@ -241,10 +241,17 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
     task_key = (chat_id, message_id)
 
     async def summary_task():
-        messages, prompt, file_url, link = create_messageThread(chat_id, hours, thread_id, topic)
+        # Calculate the timestamp threshold based on the 'hours' lookback parameter
+        since_time = db.get_latest_message(chat_id=chat_id, thread_id=thread_id)
+    
+        # 1. Check if there are messages within the time window
+        messages = db.get_messages(chat_id=chat_id, thread_id=thread_id, since=since_time, hours=hours)
 
         if not messages:
-            return "No messages logged yet to summarize.", messages
+            return "No messages logged yet to summarize.", None
+        
+        # prerequisite passed: there are messages to log!!
+        messages, prompt, file_url, link = create_messageThread(chat_id, hours, thread_id, topic)
         
         # Check for valid prompt return
         if not prompt:
@@ -283,11 +290,11 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
             return
         else:
             await status_msg.edit_text(summary, reply_markup=None, parse_mode="Markdown")
-            
-            # Mark them all as summarized after completion
-            processed_ids = [msg['id'] for msg in messages if 'id' in msg]
-            if processed_ids:
-                db.mark_as_summarized(processed_ids)
+            if messages:
+                # Mark them all as summarized after completion
+                processed_ids = [msg['id'] for msg in messages if 'id' in msg]
+                if processed_ids:
+                    db.mark_as_summarized(processed_ids)
 
     except asyncio.CancelledError:
         logger.info(f"Summary task cancelled for chat {chat_id}")

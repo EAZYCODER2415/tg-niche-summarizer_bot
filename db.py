@@ -243,6 +243,7 @@ def count_messages(chat_id, thread_id=None, since:str=None, hours:float=None):
             params.append(thread_id)
         
         if since is not None:
+            latest_dt = None
             if isinstance(since, str):
                 latest_dt = datetime.fromisoformat(since)
             else:

@@ -1,6 +1,6 @@
-# 🦁 Contributing to SMU Niche Summarizer
+# 🤖 Contributing to TLDRFlow
 
-Thanks for wanting to contribute and congratulations for getting Collaborator access! This project is built by students, for students — no prior open-source experience needed. This guide will walk you through everything from setup to submitting your first change.
+Thanks for wanting to contribute and congratulations for getting Collaborator access! No prior open-source experience needed. This guide will walk you through everything from setup to submitting your first change.
 
 ## 🚀 Getting Started
 
@@ -50,55 +50,23 @@ Pick whichever setup path works for you as both get you to the same place.
 
 </details><br>
 
-> [!IMPORTANT] 
-> **Bot Aesthetic Designer**, **Docs & Onboarding**, or **Reviewer** may skip the steps below and proceed to the 🗂️ **Project Structure**.
-
-### Environment variables
-
-> [!NOTE]
-> The repo owner is looking into repository secrets so contributors who need to run the bot won't each need their own isolated secrets. Until that is in place, use the steps below.
-
-```bash
-   pip install python-telegram-bot --upgrade  # ensure the latest version
-```
-
-1. In the project's root folder, create a **New File** and name it `.env`.
-2. Open it and paste in:
-
-```
-   TELEGRAM_BOT_TOKEN=your_token_here
-   LLM_API_KEY=your_key_here
-```
-
-3. Replace `your_token_here` and `your_key_here` with actual values, then save the file.
-   - `TELEGRAM_BOT_TOKEN` — get this from [@StealrunNshoot](https://t.me/StealrunNshoot)
-   - `LLM_API_KEY` — your LLM API key (Claude, Qwen, etc.)
-
-The bot will read these values from `.env` automatically when it runs. The file is already covered by `.gitignore`, so it won't get committed.
-
-### Run it
-
-```bash
-python bot.py
-```
-
 ## 🗂️ Project Structure
-
-*Subject to change as the project grows.*
 
 ```
 .github/
   pull_request_template.md   # Auto-filled template when you open a PR
-.env                 # Local secrets (TELEGRAM_BOT_TOKEN, LLM API key)
-.gitignore           # Excludes certain files and folders from commits
-bot.py               # Telegram handlers (commands, event handling)
-db.py                # Database storage layer (storage/query changes)
-summarizer.py        # LLM API handler (prompts, etc.)
-requirements.txt     # Python dependencies
-README.md            # Project overview
-CONTRIBUTING.md      # You are here 📍
-package.json         # Handles Commitizen configuration and dependencies
-package-lock.json    # Handles dependencies' versioning
+.env                     # Local secrets (TELEGRAM_BOT_TOKEN, LLM API key)
+.gitignore               # Excludes certain files and folders from commits
+bot.py                   # Telegram handlers (commands, event handling)
+CONTRIBUTING.md          # You are here 📍
+db.py                    # Database storage layer (storage/query changes)
+imgStorage.py            # Image storage helper library (image database query)
+package.json             # Handles Commitizen configuration and dependencies
+package-lock.json        # Handles dependencies' versioning
+README.md                # Project overview
+requirements.txt         # Python dependencies
+summarizer.py            # LLM API handler (prompts, etc.)
+system_instruction.txt   # Core system prompt for the /tldr command.
 ```
 
 ## ✊ How to Claim Work

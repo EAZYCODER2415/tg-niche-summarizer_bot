@@ -128,6 +128,7 @@ LANG_CANCEL = "lang_cancel"
 async def lang_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles inline button clicks for the language menu."""
     query = update.callback_query
+    await query.answer()
     
     data = query.data
     chat_id = query.message.chat_id
@@ -145,6 +146,7 @@ async def lang_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         is_enabled = chat_setting.get("is_enabled") if chat_setting.get("is_enabled") else False
         db.update_chat_settings(chat_id, summary_thread_id, is_enabled, selected_lang)
         await query.message.edit_text(f"✅ Summary output language successfully set to: **{selected_lang}**", parse_mode="Markdown")
+        return
         
     elif data == LANG_ETC:
         # Prompt user with ForceReply for custom text input
@@ -156,6 +158,7 @@ async def lang_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         # Store state or message tracking if needed, or handle in message listener
         context.user_data["awaiting_custom_language"] = True
         context.user_data["lang_prompt_message_id"] = prompt_message.message_id
+        return
 
 async def handle_custom_language_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Captures the reply text when the user selects 'etc.' and validates via LLM."""

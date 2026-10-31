@@ -853,7 +853,7 @@ async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE)
     thread_id = update.effective_message.message_thread_id if update.effective_message else None
 
     user = update.effective_user
-    member = await context.bot.get_chat_member(chat.id, user.id)
+    member = await context.bot.get_chat_member(chat_id, user.id)
     if member.status not in ["administrator", "creator"]:
         await update.message.reply_text("⛔ Only group administrators can configure summary settings.")
         return

@@ -602,7 +602,7 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
     display_config = f"📥 {config_status}topic" if config_status else "⚙️ default routing"
     status_toggle = "🟢 ENABLED" if is_enabled else "🔴 DISABLED"
-    toggle = InlineKeyboardButton("🔴 Toggle OFF", callback_data="config_disable") if is_enabled else InlineKeyboardButton("🟢 Toggle ON", callback_data="config_enable")
+    toggle = [InlineKeyboardButton("🔴 Toggle OFF", callback_data="config_disable")] if is_enabled else [InlineKeyboardButton("🟢 Toggle ON", callback_data="config_enable")]
     
     text = (
         f"**Automatic summaries are currently set to** {display_config}, {status_toggle}\n\n"

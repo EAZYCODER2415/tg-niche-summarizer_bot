@@ -395,7 +395,7 @@ def get_or_create_chat_metadata(chat_id: int, thread_id: int | None = None) -> d
 
     query = """
         INSERT INTO chat_metadata (chat_id, thread_id, summary_thread_id, is_enabled, message_count, updated_at, pending_summary, language)
-        VALUES (%s, %s, %s, TRUE, 1, CURRENT_TIMESTAMP)
+        VALUES (%s, %s, %s, TRUE, 1, CURRENT_TIMESTAMP, FALSE, %s)
         ON CONFLICT (chat_id, COALESCE(thread_id, -1)) 
         DO UPDATE SET updated_at = chat_metadata.updated_at
         RETURNING summary_thread_id, is_enabled, message_count, language;

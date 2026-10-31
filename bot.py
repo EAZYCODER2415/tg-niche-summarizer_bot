@@ -256,6 +256,66 @@ async def handle_custom_language_reply(update: Update, context: ContextTypes.DEF
     
     return
 
+async def config_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles inline button clicks for the config menu."""
+    query = update.callback_query
+
+    data = query.data
+    chat_id = query.message.chat_id
+    thread_id = query.message.message_thread_id
+
+    try:
+        await query.answer()
+        logger.info(f"Config command fallback handler triggered from {chat_id} ({thread_id})")
+    except Exception as e:
+        print(f"Failed to answer callback query: {e}")
+        return
+    
+    try:
+        if data in ["config_here", "config_default", "config_enable", "config_disable"]:
+            settings = db.get_chat_settings(chat_id, thread_id)
+            summary_thread_id = settings.get("summary_thread_id") if settings.get("summary_thread_id") else None
+            is_enabled = settings.get("is_enabled")
+
+        if data == "config_cancel":
+            print("Config command cancel triggered!")
+            try:
+                await query.message.delete()
+            except Exception:
+                pass
+            return
+        elif data == "config_here":
+            if (summary_thread_id == thread_id):
+                await query.message.edit_text(f"🚫 Automatic summary already set to **📥 this topic**, please try another action.", parse_mode="Markdown")
+                return
+            db.update_chat_settings(chat_id, summary_thread_id=thread_id)
+            await query.message.edit_text(f"✅ Automatic summary configuration successfully set to **📥 this topic**", parse_mode="Markdown")
+            return
+        elif data == "config_default":
+            if not summary_thread_id:
+                await query.message.edit_text(f"🚫 Automatic summary already set to **⚙️ default routing**, please try another action.", parse_mode="Markdown")
+                return
+            db.update_chat_settings(chat_id, summary_thread_id=None)
+            await query.message.edit_text(f"✅ Automatic summary configuration successfully set to **⚙️ default routing**", parse_mode="Markdown")
+            return
+        elif data == "config_enable":
+            db.update_chat_settings(chat_id, is_enabled=True)
+            await query.message.edit_text(f"✅ Automatic summary configuration successfully **🟢 ENABLED**", parse_mode="Markdown")
+            return
+            
+        elif data == "config_disable":
+            db.update_chat_settings(chat_id, is_enabled=False)
+            await query.message.edit_text(f"✅ Automatic summary configuration successfully **🔴 DISABLED**", parse_mode="Markdown")
+            return
+    except Exception as e:
+        logger.error(f"Could not execute action by error: {e}")
+        await query.message.reply_text(
+            f"Error with config command: {e}",
+            reply_markup=None,
+            parse_mode="Markdown"
+        )
+        return
+
 # ------------------------------------------------------
 
 def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=None):
@@ -470,11 +530,15 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
             return
         else:
             await status_msg.edit_text(summary, reply_markup=None, parse_mode="Markdown")
+            # NEEDS ATTENTION: HARD deletion of messages and images after summary completion.
+            # 1. MESSAGE DELETION
             if messages:
                 # Mark them all as summarized after completion
                 processed_ids = [msg['id'] for msg in messages if 'id' in msg]
                 if processed_ids:
                     db.mark_as_summarized(processed_ids)
+            # 2. IMAGE/ATTACHMENT DELETION
+
 
     except asyncio.CancelledError:
         logger.info(f"Summary task cancelled for chat {chat_id}")
@@ -527,75 +591,37 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("⛔ Only group administrators can configure summary settings.")
         return
 
-    VALID_SUBCOMMANDS = ["enable", "disable", "topic", "here", "default"]
-    subcommand = context.args[0].lower() if context.args else "topic"
+    # ------- Config command update ----------------
 
+    # Fetch current setting from DB
     settings = db.get_chat_settings(chat.id, thread_id)
+    summary_thread_id = settings.get("summary_thread_id") if settings.get("summary_thread_id") else None
     is_enabled = settings.get("is_enabled")
+    config_status = None
 
-    if subcommand not in VALID_SUBCOMMANDS:
-        await update.message.reply_text(
-            "⚠️ **Invalid command parameter.**\n\n"
-            "**Usage:**\n"
-            "• `/config topic/here` - Set summary target to current topic\n"
-            "• `/config default` - Set to default routing\n"
-            "• `/config enable` - Re-enable automatic summaries\n"
-            "• `/config disable` - Disable automatic summaries\n",
-            message_thread_id=current_thread_id,
-            parse_mode="Markdown"
-        )
-        return
-    else:
-        # --- Re-enable summaries ---
-        if subcommand == "enable":
-            db.update_chat_settings(chat.id, is_enabled=True)
-            await update.message.reply_text(
-                "🔔 **Automatic summaries re-enabled!** Type `/config disable` to undo this action if needed.",
-                parse_mode="Markdown"
-            )
-            return
+    cancel = InlineKeyboardButton("❌ Cancel", callback_data="config_cancel")
 
-        if is_enabled:
-            # --- Set / Update target topic ---
-            if subcommand in ["topic", "here"]:
-                if current_thread_id:
-                    db.update_chat_settings(chat.id, summary_thread_id=current_thread_id)
-                    await update.message.reply_text(
-                        "✅ **Automatic summary destination set!**\nThey will now be posted to this topic thread.",
-                        message_thread_id=current_thread_id,
-                        parse_mode="Markdown"
-                    )
-                else:
-                    # --- Set to default ---
-                    db.update_summary_thread(chat.id, summary_thread_id=None, is_enabled=True)
-                    await update.message.reply_text(
-                        "🔄 **Reset to Default.** Automatic summaries will post in whichever topic reaches the threshold.",
-                        parse_mode="Markdown"
-                    )
-
-            # --- Reset to default (Active Topic) ---
-            elif subcommand == "default":
-                db.update_chat_settings(chat.id, summary_thread_id=None)
-                await update.message.reply_text(
-                    "🔄 **Reset to Default.** Automatic summaries will post in whichever topic reaches the threshold.",
-                    parse_mode="Markdown"
-                )
-        else:
-            await update.message.reply_text(
-                "⚠️ **Error:** Automatic summary must be enabled to proceed.",
-                parse_mode="Markdown"
-            )
-
-        # --- Disable summaries (Preserves target topic) ---
-        if subcommand == "disable":
-            db.update_chat_settings(chat.id, is_enabled=False)
-            settings = db.get_chat_settings(chat.id, thread_id)
-            is_enabled = settings.get("is_enabled")
-            await update.message.reply_text(
-                "🔕 **Automatic summaries disabled.** Your target topic setting has been saved. Type `/config enable` to resume.",
-                parse_mode="Markdown"
-            )
-            return
+    if summary_thread_id:
+        config_status = "this " if summary_thread_id == thread_id else "another "
+    
+    display_config = f"📥 {config_status}topic" if config_status else "⚙️ default routing"
+    status_toggle = "🟢 ENABLED" if is_enabled else "🔴 DISABLED"
+    toggle = InlineKeyboardButton("🔴 Toggle OFF", callback_data="config_disable") if is_enabled else InlineKeyboardButton("🟢 Toggle ON", callback_data="config_enable")
+    
+    text = (
+        f"**Automatic summaries are currently set to** {display_config}, {status_toggle}\n\n"
+        "⬇️ Select the following buttons below to make changes:"
+    )
+    
+    # 4 main buttons, etc. button, and cancel button layout
+    keyboard = [[
+        [InlineKeyboardButton("⚙️ Set to Default", callback_data="config_here")],
+        [InlineKeyboardButton("📥 Set to HERE", callback_data="config_default")]
+    ], 
+    toggle, cancel]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+    return
 
 # Dictionary to store active debounce tasks: {(chat_id, thread_id): asyncio.Task}
 active_debounce_tasks = defaultdict(dict)
@@ -951,6 +977,13 @@ def main() -> None:
         CallbackQueryHandler(
             lang_callback_handler, 
             pattern=f"^({LANG_PREFIX}|{LANG_ETC}|{LANG_CANCEL})"
+        )
+    )
+    # Add a callback handler for the modal button set for config command
+    application.add_handler(
+        CallbackQueryHandler(
+            config_callback_handler, 
+            pattern=f"^(config_here|config_default|config_enable|config_disable|config_cancel)"
         )
     )
 

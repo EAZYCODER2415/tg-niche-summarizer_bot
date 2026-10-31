@@ -595,7 +595,7 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     is_enabled = settings.get("is_enabled")
     config_status = None
 
-    cancel = InlineKeyboardButton("❌ Cancel", callback_data="config_cancel")
+    cancel = [InlineKeyboardButton("❌ Cancel", callback_data="config_cancel")]
 
     if summary_thread_id:
         config_status = "this " if summary_thread_id == thread_id else "another "

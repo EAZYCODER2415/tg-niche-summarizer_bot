@@ -295,12 +295,12 @@ async def config_callback_handler(update: Update, context: ContextTypes.DEFAULT_
             await query.message.edit_text(f"✅ Automatic summary configuration successfully set to **⚙️ default routing**", parse_mode="Markdown")
             return
         elif data == "config_enable":
-            db.update_chat_settings(chat_id, is_enabled=True)
+            summary_thread_id
+            db.update_chat_settings(chat_id, summary_thread_id=summary_thread_id, is_enabled=True)
             await query.message.edit_text(f"✅ Automatic summary configuration successfully **🟢 ENABLED**", parse_mode="Markdown")
             return
-            
         elif data == "config_disable":
-            db.update_chat_settings(chat_id, is_enabled=False)
+            db.update_chat_settings(chat_id, summary_thread_id=summary_thread_id, is_enabled=False)
             await query.message.edit_text(f"✅ Automatic summary configuration successfully **🔴 DISABLED**", parse_mode="Markdown")
             return
     except Exception as e:
@@ -872,17 +872,17 @@ async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # 4 main buttons, etc. button, and cancel button layout
     keyboard = [
         [
-            InlineKeyboardButton("English", callback_data=f"{LANG_PREFIX}English"),
-            InlineKeyboardButton("中文", callback_data=f"{LANG_PREFIX}Chinese")
+            InlineKeyboardButton("🌐 Auto-detect (Default)", callback_data=f"{LANG_PREFIX}auto"),
+            InlineKeyboardButton("English", callback_data=f"{LANG_PREFIX}English")
         ],
         [
+            InlineKeyboardButton("中文", callback_data=f"{LANG_PREFIX}Chinese"),
             InlineKeyboardButton("ไทย", callback_data=f"{LANG_PREFIX}Thai"),
-            InlineKeyboardButton("Melayu", callback_data=f"{LANG_PREFIX}Malay")
         ],
         [
-            InlineKeyboardButton("etc. ✍️", callback_data=LANG_ETC),
-            InlineKeyboardButton("❌ Cancel", callback_data=LANG_CANCEL)
-        ]
+            InlineKeyboardButton("Melayu", callback_data=f"{LANG_PREFIX}Malay"),
+            InlineKeyboardButton("etc. ✍️", callback_data=LANG_ETC)
+        ], [InlineKeyboardButton("❌ Cancel", callback_data=LANG_CANCEL)]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")

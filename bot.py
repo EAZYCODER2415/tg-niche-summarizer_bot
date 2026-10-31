@@ -72,13 +72,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Generate an instant summary within a specific timeframe (in hours, e.g., `2` or `1.5`) and optional target topic.\n\n"
         "📎 **File Tagging**\n"
         "Include `#summarize` in file or media captions so I parse them into summary data!\n\n"
-        "⚙️ **`/config`** `[setting]`\n"
-        "Manage automatic summary settings for your chat:\n"
-        "• `/config topic/here` — Route automated summaries to the current topic\n"
-        "• `/config default` — Reset routing to default\n"
-        "• `/config enable` — Turn on automatic threshold summaries\n"
-        "• `/config disable` — Turn off automatic threshold summaries\n\n"
-        "🌐 **`/lang`** `[language]`\n"
+        "⚙️ **`/config`**\n"
+        "Manage automatic summary settings for your chat:\n\n"
+        "🌐 **`/lang`**\n"
         "Configure bot's output language (auto or empty params for detect language).\n\n"
         "🚩 **`/report`**\n"
         "Submit feedback or bug reports to TLDRFlow admin via direct message.\n\n"
@@ -855,6 +851,12 @@ async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Handles the standalone /lang command."""
     chat_id = update.effective_chat.id
     thread_id = update.effective_message.message_thread_id if update.effective_message else None
+
+    user = update.effective_user
+    member = await context.bot.get_chat_member(chat.id, user.id)
+    if member.status not in ["administrator", "creator"]:
+        await update.message.reply_text("⛔ Only group administrators can configure summary settings.")
+        return
     
     # Fetch current setting from DB
     chat_setting = db.get_chat_settings(chat_id, thread_id)

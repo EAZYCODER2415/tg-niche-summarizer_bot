@@ -79,20 +79,11 @@ Generate an instant summary within a specific timeframe (in hours, e.g., `2` or 
 
 - 📎 **File Tagging**: Include `#summarize` in file or media captions so the bot parses them into summary data!
 
--⚙️ **`/config`** `[setting]`:"
-Manage automatic summary settings for the chat:
+- ⚙️ **`/config`** — Manage automatic summary settings for the chat:
 
-• `/config topic/here` — Route automated summaries to the current topic
+- 🌐 **`/lang`** — Selects preferred language for generated summaries.
 
-• `/config default` — Reset routing to default
-
-• `/config enable` — Turn on automatic threshold summaries
-
-• `/config disable` — Turn off automatic threshold summaries
-
-- `/lang` — Selects preferred language for generated summaries.
-
-- `/report` — Submits feedback or bug reports securely.
+- 🚩 **`/report`** — Submits feedback or bug reports securely.
 
 ---
 

@@ -27,7 +27,7 @@ import asyncio
 from collections import defaultdict
 
 # Convert local path of images to Base64 URIs
-from imgStorage import safe_upload_image
+from imgStorage import safe_upload_image, delete_image_by_url
 
 # Setup Telegram API libraries
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ForceReply 
@@ -380,7 +380,7 @@ def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=No
     else:
         file_url = None
     
-    return messages, prompt, file_url, link
+    return messages, prompt, file_url, file_url_lines, link
 
 async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_thread_id: int | None = None) -> None:
     chat_id = update.effective_chat.id
@@ -483,7 +483,7 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
             return "No messages logged yet to summarize.", None
         
         # prerequisite passed: there are messages to log!!
-        messages, prompt, file_url, link = create_messageThread(chat_id, hours, thread_id, topic)
+        messages, prompt, file_url, file_urls, link = create_messageThread(chat_id, hours, thread_id, topic)
         
         # Check for valid prompt return
         if not prompt:
@@ -509,7 +509,7 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
             )
         else:
             return "⚠️ Failed to generate summary. Cannot fetch data.", messages
-        return summary, messages
+        return summary, messages, file_urls
 
     # Register task in dictionary to ensure it is cancelable
     current_task = asyncio.create_task(summary_task())
@@ -517,16 +517,17 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
 
     summary = None
     messages = []
+    file_urls = []
 
     try:
-        summary, messages = await current_task
+        summary, messages, file_urls = await current_task
         
         # 6. Post-process successful generation
         if not summary:
             return
         else:
             await status_msg.edit_text(summary, reply_markup=None, parse_mode="Markdown")
-            # NEEDS ATTENTION: HARD deletion of messages and images after summary completion.
+            # HARD deletion of messages and images after summary completion.
             # 1. MESSAGE DELETION
             if messages:
                 # Mark them all as summarized after completion
@@ -534,6 +535,22 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
                 if processed_ids:
                     db.mark_as_summarized(processed_ids)
             # 2. IMAGE/ATTACHMENT DELETION
+            if file_urls:
+                # Common image extensions to filter by
+                IMAGE_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp')
+
+                # 'file_url' is a list of URL strings associated with the summarized messages
+                for url in file_urls:
+                    # Check if the URL points to an image
+                    if url.lower().endswith(IMAGE_EXTENSIONS):
+                        print(f"Deleting image from R2: {url}")
+                        # Call your R2 deletion function
+                        success = await delete_image_by_url(url)
+                        if not success:
+                            print(f"Failed to delete image: {url}")
+                    else:
+                        # It's a non-image attachment (like a PDF or audio), handle separately if needed
+                        pass
 
 
     except asyncio.CancelledError:

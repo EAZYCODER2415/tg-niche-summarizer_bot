@@ -71,3 +71,38 @@ def safe_upload_image(file_bytes: bytes, object_name: str, content_type: str = "
         return f"{public_domain}/{object_name}"
     else:
         return f"https://pub-{os.getenv('R2_ACCOUNT_ID')}.r2.dev/{object_name}"
+
+from urllib.parse import urlparse
+from botocore.exceptions import ClientError
+
+async def delete_image_by_url(image_url: str) -> bool:
+    """
+    Deletes an image from Cloudflare R2 given its public URL.
+    Returns True if successful, False otherwise.
+    """
+    try:
+        bucket_name = os.getenv("R2_BUCKET_NAME")
+        # 1. Parse the URL to extract the path (object key)
+        parsed_url = urlparse(image_url)
+        # path looks like "/folder/filename.png", strip the leading slash
+        object_key = parsed_url.path.lstrip('/')
+        
+        if not object_key:
+            print("Error: Invalid image URL provided for deletion.")
+            return False
+
+        # 2. Call R2/S3 to delete the object
+        s3.delete_object(
+            Bucket=bucket_name,
+            Key=object_key
+        )
+        
+        print(f"Successfully deleted {object_key} from R2.")
+        return True
+
+    except ClientError as e:
+        print(f"AWS/R2 Client Error during deletion: {e}")
+        return False
+    except Exception as e:
+        print(f"Unexpected error deleting image: {e}")
+        return False

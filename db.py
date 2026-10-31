@@ -369,7 +369,7 @@ def mark_as_summarized(message_ids: list[int]) -> int:
         placeholder = "%s" if DATABASE_URL else "?"
         placeholders = ", ".join([placeholder] * len(message_ids))
         
-        query = f"UPDATE messages SET is_summarized = TRUE WHERE id IN ({placeholders})"
+        query = f"DELETE FROM messages WHERE id IN ({placeholders})"
         cursor.execute(query, message_ids)
         
         updated_count = cursor.rowcount

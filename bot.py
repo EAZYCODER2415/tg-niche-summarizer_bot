@@ -595,7 +595,7 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     is_enabled = settings.get("is_enabled")
     config_status = None
 
-    cancel = [InlineKeyboardButton("❌ Cancel", callback_data="config_cancel")]
+    cancel = [InlineKeyboardButton("❌ Close", callback_data="config_cancel")]
 
     if summary_thread_id:
         config_status = "this " if summary_thread_id == thread_id else "another "
@@ -611,8 +611,8 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
     # 4 main buttons, etc. button, and cancel button layout
     keyboard = [[
-        InlineKeyboardButton("⚙️ Set to Default", callback_data="config_here"),
-        InlineKeyboardButton("📥 Set to HERE", callback_data="config_default")
+        InlineKeyboardButton("📥 Set to HERE", callback_data="config_here"),
+        InlineKeyboardButton("⚙️ Set to Default", callback_data="config_default")
     ], 
     toggle, cancel]
     reply_markup = InlineKeyboardMarkup(keyboard)

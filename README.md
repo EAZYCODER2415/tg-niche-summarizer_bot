@@ -69,7 +69,7 @@ OPENROUTER_API_KEY=your_openrouter_api_key_here
 </code></pre>
 
 5. **Run the Bot**
-<pre><code class="language-bash">python main.py</code></pre>
+<pre><code class="language-bash">python bot.py</code></pre>
 
 ---
 

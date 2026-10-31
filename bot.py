@@ -11,6 +11,7 @@ Required Setup for each run:
 
 import logging
 import os
+import time
 
 # HTTP Health Check Endpoint
 import aiohttp
@@ -128,47 +129,90 @@ LANG_CANCEL = "lang_cancel"
 async def lang_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles inline button clicks for the language menu."""
     query = update.callback_query
-    await query.answer()
-    
+
     data = query.data
     chat_id = query.message.chat_id
     thread_id = query.message.message_thread_id
-    
-    if data == LANG_CANCEL:
-        await query.message.delete()
-        return
 
-    elif data.startswith(LANG_PREFIX):
-        selected_lang = data.replace(LANG_PREFIX, "")
-        # Save to database
-        chat_setting = db.get_chat_settings(chat_id, thread_id)
-        summary_thread_id = chat_setting.get("summary_thread_id") if chat_setting.get("summary_thread_id") else None
-        is_enabled = chat_setting.get("is_enabled") if chat_setting.get("is_enabled") else False
-        db.update_chat_settings(chat_id, summary_thread_id, is_enabled, selected_lang)
-        await query.message.edit_text(f"✅ Summary output language successfully set to: **{selected_lang}**", parse_mode="Markdown")
+    try:
+        await query.answer()
+        logger.info(f"Language command fallback handler triggered from {chat_id} ({thread_id})")
+    except Exception as e:
+        print(f"Failed to answer callback query: {e}")
         return
-        
-    elif data == LANG_ETC:
-        # Prompt user with ForceReply for custom text input
-        prompt_message = await query.message.reply_text(
-            "✍️ Please reply to this message with your desired language or dialect (e.g., *Singlish, Japanese, Spanish*):",
-            reply_markup=ForceReply(selective=True),
+    
+    try:
+        if data == LANG_CANCEL:
+            print("Language command cancel triggered!")
+            context.user_data["awaiting_custom_language"] = False
+            try:
+                await query.message.delete()
+            except Exception:
+                pass
+            
+            prompt_id = context.user_data.get("lang_prompt_message_id")
+            if prompt_id:
+                try:
+                    await context.bot.delete_message(chat_id=chat_id, message_id=prompt_id)
+                except Exception:
+                    pass
+            return
+        elif data.startswith(LANG_PREFIX):
+            selected_lang = data.replace(LANG_PREFIX, "")
+            # Save to database
+            chat_setting = db.get_chat_settings(chat_id, thread_id)
+            summary_thread_id = chat_setting.get("summary_thread_id") if chat_setting.get("summary_thread_id") else None
+            is_enabled = chat_setting.get("is_enabled") if chat_setting.get("is_enabled") else False
+            db.update_chat_settings(chat_id, summary_thread_id, is_enabled, selected_lang)
+            await query.message.edit_text(f"✅ Summary output language successfully set to: **{selected_lang}**", parse_mode="Markdown")
+            return
+            
+        elif data == LANG_ETC:
+            print("Language e.t.c fallback handler triggered")
+            # Prompt user with ForceReply for custom text input
+            prompt_message = await query.message.reply_text(
+                "✍️ Please reply to this message with your desired language or dialect (e.g., *Singlish, Japanese, Spanish*):",
+                reply_markup=ForceReply(selective=True),
+                parse_mode="Markdown"
+            )
+            # Store state or message tracking if needed, or handle in message listener
+            context.user_data["awaiting_custom_language"] = True
+            context.user_data["lang_prompt_message_id"] = prompt_message.message_id
+            context.user_data["lang_message_id"] = query.message.message_id
+            context.user_data["lang_prompt_timestamp"] = time.time()
+            return
+    except Exception as e:
+        logger.error(f"Could not execute action by error: {e}")
+        await query.message.reply_text(
+            f"Error with language command: {e}",
+            reply_markup=None,
             parse_mode="Markdown"
         )
-        # Store state or message tracking if needed, or handle in message listener
-        context.user_data["awaiting_custom_language"] = True
-        context.user_data["lang_prompt_message_id"] = prompt_message.message_id
-        return
 
 async def handle_custom_language_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Captures the reply text when the user selects 'etc.' and validates via LLM."""
     if not context.user_data.get("awaiting_custom_language"):
         return
 
+    chat_id = update.effective_chat.id
+    expected_id = context.user_data.get("lang_prompt_message_id")
+    lang_msg_id = context.user_data.get("lang_message_id")
+
+    prompt_time = context.user_data.get("lang_prompt_timestamp", 0)
+    if (prompt_time > 0 and (time.time() - prompt_time > 60)): # 60 seconds timeout
+        print("Time limit reached!")
+        context.user_data["awaiting_custom_language"] = False
+        # Clean up the old menu message safely
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=lang_msg_id)
+        except Exception:
+            pass
+        # Send a fresh message instead of editing the locked ForceReply prompt
+        await update.message.reply_text("⏱️ Language input session expired. Please type `/lang` to try again.", parse_mode="Markdown")
+        return
+
     # Check if the user is replying to the correct prompt message
     reply_to = update.message.reply_to_message
-    expected_id = context.user_data.get("lang_prompt_message_id")
-    
     if not reply_to or reply_to.message_id != expected_id:
         return
 
@@ -176,30 +220,41 @@ async def handle_custom_language_reply(update: Update, context: ContextTypes.DEF
     context.user_data["awaiting_custom_language"] = False
     
     user_text = update.message.text
-    chat_id = update.effective_chat.id
-    thread_id = update.effective_message.message_thread_id
     
     # Send temporary processing message
-    status_msg = await update.message.reply_text("🔍 Evaluating language input...")
-
+    status_msg = await update.message.reply_text("🔍 Evaluating language input...", parse_mode="Markdown")
+    context.user_data["lang_prompt_timestamp"] = 0
+    prompt_time = context.user_data.get("lang_prompt_timestamp", 0)
     try:
         # Run your lightweight LLM evaluation helper with a timeout
         normalized_lang = await asyncio.wait_for(
-            validate_language(user_text), 
-            timeout=10.0
+            asyncio.to_thread(validate_language, user_text), 
+            timeout=15.0
         )
         
         if normalized_lang:
-            db.update_chat_language(chat_id, thread_id, normalized_lang)
-            await status_msg.edit_text(f"✅ Custom language successfully set to: **{normalized_lang}**", parse_mode="Markdown")
+            db.update_chat_settings(chat_id, language=normalized_lang)
+            try:
+                await context.bot.delete_message(chat_id=chat_id, message_id=expected_id)
+                await context.bot.delete_message(chat_id=chat_id, message_id=lang_msg_id)
+                await update.message.delete()
+            except Exception:
+                pass
+            
+            # Edit this message to send a clean success notice
+            await status_msg.edit_text(f"✅ Summary output language successfully set to: **{normalized_lang}**")
         else:
             await status_msg.edit_text("❌ Could not recognize a valid language from your input. Please try again with `/lang`.")
             
     except asyncio.TimeoutError:
         await status_msg.edit_text("⏱️ Language evaluation timed out. Please try again with `/lang`.")
+        return
     except Exception as e:
-        logging.error(f"Error evaluating custom language: {e}")
+        logger.error(f"Error evaluating custom language: {e}")
         await status_msg.edit_text("⚠️ An error occurred while evaluating your input.")
+        return
+    
+    return
 
 # ------------------------------------------------------
 
@@ -802,8 +857,8 @@ async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE)
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
     await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+    return
 
 async def report_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("✨ **Coming soon!**", parse_mode="Markdown")
@@ -891,6 +946,14 @@ def main() -> None:
     # Add a callback Cancel button for the summarize command
     application.add_handler(CallbackQueryHandler(cancel_callback_handler, pattern="^cancel_summary$"))
 
+    # Add a callback handler for the modal button set for language command
+    application.add_handler(
+        CallbackQueryHandler(
+            lang_callback_handler, 
+            pattern=f"^({LANG_PREFIX}|{LANG_ETC}|{LANG_CANCEL})"
+        )
+    )
+
     # Register global error handler
     application.add_error_handler(error_handler)
 
@@ -906,8 +969,9 @@ def main() -> None:
         MessageHandler(
             (filters.TEXT | filters.ATTACHMENT) & ~filters.COMMAND,
             log_message
-        )
+        ), group=0
     )
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_custom_language_reply), group=1)
 
     # Detect an event in which the bot is removed from a chat, deleting chat_metadata for all involved.
     application.add_handler(ChatMemberHandler(new_chat_handler, ChatMemberHandler.MY_CHAT_MEMBER))

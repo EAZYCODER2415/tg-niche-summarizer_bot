@@ -19,7 +19,7 @@ from aiohttp import web
 import db
 from db import init_db, delete_old_messages
 
-from summarizer import summarizeLLMtool, checkForTopic
+from summarizer import summarizeLLMtool, checkForTopic, validate_language
 
 # Timeout check
 import asyncio
@@ -29,7 +29,7 @@ from collections import defaultdict
 from imgStorage import safe_upload_image
 
 # Setup Telegram API libraries
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update 
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ForceReply 
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -39,6 +39,7 @@ from telegram.ext import (
     AIORateLimiter,
     CallbackQueryHandler,
     ChatMemberHandler,
+    ContextTypes
 )
 
 from telegram.error import TelegramError
@@ -96,6 +97,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
     return
 
+# ALL THE MODAL BUTTON CALLBACK HANDLERS HERE
+# ----------------------------------------------------------
 async def cancel_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
 
@@ -116,6 +119,86 @@ async def cancel_callback_handler(update: Update, context: ContextTypes.DEFAULT_
             await query.message.delete()
         except Exception as e:
             logger.error(f"Failed to delete status message on cancel: {e}")
+
+# Define callback prefixes for language menu
+LANG_PREFIX = "lang_select_"
+LANG_ETC = "lang_etc_custom"
+LANG_CANCEL = "lang_cancel"
+
+async def lang_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles inline button clicks for the language menu."""
+    query = update.callback_query
+    
+    data = query.data
+    chat_id = query.message.chat_id
+    thread_id = query.message.message_thread_id
+    
+    if data == LANG_CANCEL:
+        await query.message.delete()
+        return
+
+    elif data.startswith(LANG_PREFIX):
+        selected_lang = data.replace(LANG_PREFIX, "")
+        # Save to database
+        chat_setting = db.get_chat_settings(chat_id, thread_id)
+        summary_thread_id = chat_setting.get("summary_thread_id") if chat_setting.get("summary_thread_id") else None
+        is_enabled = chat_setting.get("is_enabled") if chat_setting.get("is_enabled") else False
+        db.update_chat_settings(chat_id, summary_thread_id, is_enabled, selected_lang)
+        await query.message.edit_text(f"✅ Summary output language successfully set to: **{selected_lang}**", parse_mode="Markdown")
+        
+    elif data == LANG_ETC:
+        # Prompt user with ForceReply for custom text input
+        prompt_message = await query.message.reply_text(
+            "✍️ Please reply to this message with your desired language or dialect (e.g., *Singlish, Japanese, Spanish*):",
+            reply_markup=ForceReply(selective=True),
+            parse_mode="Markdown"
+        )
+        # Store state or message tracking if needed, or handle in message listener
+        context.user_data["awaiting_custom_language"] = True
+        context.user_data["lang_prompt_message_id"] = prompt_message.message_id
+
+async def handle_custom_language_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Captures the reply text when the user selects 'etc.' and validates via LLM."""
+    if not context.user_data.get("awaiting_custom_language"):
+        return
+
+    # Check if the user is replying to the correct prompt message
+    reply_to = update.message.reply_to_message
+    expected_id = context.user_data.get("lang_prompt_message_id")
+    
+    if not reply_to or reply_to.message_id != expected_id:
+        return
+
+    # Clear state immediately to prevent lingering triggers
+    context.user_data["awaiting_custom_language"] = False
+    
+    user_text = update.message.text
+    chat_id = update.effective_chat.id
+    thread_id = update.effective_message.message_thread_id
+    
+    # Send temporary processing message
+    status_msg = await update.message.reply_text("🔍 Evaluating language input...")
+
+    try:
+        # Run your lightweight LLM evaluation helper with a timeout
+        normalized_lang = await asyncio.wait_for(
+            validate_language(user_text), 
+            timeout=10.0
+        )
+        
+        if normalized_lang:
+            db.update_chat_language(chat_id, thread_id, normalized_lang)
+            await status_msg.edit_text(f"✅ Custom language successfully set to: **{normalized_lang}**", parse_mode="Markdown")
+        else:
+            await status_msg.edit_text("❌ Could not recognize a valid language from your input. Please try again with `/lang`.")
+            
+    except asyncio.TimeoutError:
+        await status_msg.edit_text("⏱️ Language evaluation timed out. Please try again with `/lang`.")
+    except Exception as e:
+        logging.error(f"Error evaluating custom language: {e}")
+        await status_msg.edit_text("⚠️ An error occurred while evaluating your input.")
+
+# ------------------------------------------------------
 
 def create_messageThread(chat_id:int, hours: float, thread_id:int, topic: str=None):
     print(f"DEBUG: querying chat_id={chat_id}, thread_id={thread_id}")
@@ -295,15 +378,19 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE, target_t
         # Initialize summary
         summary = None
 
+        # Fetch language from chat_settings
+        chat_setting = db.get_chat_settings(chat_id, thread_id)
+        language = chat_setting.get("language") if chat_setting.get("language") else "auto"
+
         # Run summarizeLLMtool function while keeping a 30-second time limit to prevent lagging
         if prompt and file_url:
             summary = await asyncio.wait_for(
-                asyncio.to_thread(summarizeLLMtool, prompt, file_url, link), 
+                asyncio.to_thread(summarizeLLMtool, prompt, file_url, link, language), 
                 timeout=30.0
             )
         elif prompt:
             summary = await asyncio.wait_for(
-                asyncio.to_thread(summarizeLLMtool, prompt, None, link), 
+                asyncio.to_thread(summarizeLLMtool, prompt, None, link, language), 
                 timeout=30.0
             )
         else:
@@ -680,9 +767,40 @@ async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     except Exception as e:
         logger.error(f"Failed to log message: {e}")
 
-async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("✨ **Coming soon!**", parse_mode="Markdown")
-    return
+async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles the standalone /lang command."""
+    chat_id = update.effective_chat.id
+    thread_id = update.effective_message.message_thread_id if update.effective_message else None
+    
+    # Fetch current setting from DB
+    chat_setting = db.get_chat_settings(chat_id, thread_id)
+    current_lang = chat_setting.get("language")
+    
+    display_lang = f"🗣️ {current_lang}" if current_lang else "🌐 Auto-detect (Default)"
+    
+    text = (
+        f"**Current Output Language:** {display_lang}\n\n"
+        "Select a language below or choose **etc.** to type a custom language/dialect:"
+    )
+    
+    # 4 main buttons, etc. button, and cancel button layout
+    keyboard = [
+        [
+            InlineKeyboardButton("English", callback_data=f"{LANG_PREFIX}English"),
+            InlineKeyboardButton("中文", callback_data=f"{LANG_PREFIX}Chinese")
+        ],
+        [
+            InlineKeyboardButton("ไทย", callback_data=f"{LANG_PREFIX}Thai"),
+            InlineKeyboardButton("Melayu", callback_data=f"{LANG_PREFIX}Malay")
+        ],
+        [
+            InlineKeyboardButton("etc. ✍️", callback_data=LANG_ETC),
+            InlineKeyboardButton("❌ Cancel", callback_data=LANG_CANCEL)
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
 
 async def report_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("✨ **Coming soon!**", parse_mode="Markdown")

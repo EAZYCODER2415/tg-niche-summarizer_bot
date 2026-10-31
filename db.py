@@ -89,7 +89,8 @@ def init_db():
                     is_enabled BOOLEAN DEFAULT FALSE,
                     message_count INTEGER,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    pending_summary BOOLEAN DEFAULT FALSE
+                    pending_summary BOOLEAN DEFAULT FALSE,
+                    language TEXT DEFAULT NULL 
                 )
                 """
             )
@@ -385,42 +386,61 @@ def get_or_create_chat_metadata(chat_id: int, thread_id: int | None = None) -> d
 
     # Fallback: In case there are no existing topics in metadata before this one
     try:
-        summary_thread_id = get_chat_settings(chat_id)
-        summary_thread_id = summary_thread_id["summary_thread_id"] if summary_thread_id["summary_thread_id"] else None
+        chat_setting = get_chat_settings(chat_id)
+        summary_thread_id = chat_setting["summary_thread_id"] if chat_setting["summary_thread_id"] else None
+        language = chat_setting["language"] if chat_setting["language"] else None
     except:
         summary_thread_id = None
+        language = None
 
     query = """
-        INSERT INTO chat_metadata (chat_id, thread_id, summary_thread_id, is_enabled, message_count, updated_at)
+        INSERT INTO chat_metadata (chat_id, thread_id, summary_thread_id, is_enabled, message_count, updated_at, pending_summary, language)
         VALUES (%s, %s, %s, TRUE, 1, CURRENT_TIMESTAMP)
         ON CONFLICT (chat_id, COALESCE(thread_id, -1)) 
         DO UPDATE SET updated_at = chat_metadata.updated_at
-        RETURNING summary_thread_id, is_enabled, message_count;
+        RETURNING summary_thread_id, is_enabled, message_count, language;
     """
 
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(query, (chat_id, thread_id, summary_thread_id))
+        cursor.execute(query, (chat_id, thread_id, summary_thread_id, language))
         return cursor.fetchone()
 
-def update_chat_settings(chat_id: int, summary_thread_id: int | None = None, is_enabled: bool = True) -> None:
+def update_chat_settings(chat_id: int, summary_thread_id: int | None = None, is_enabled: bool = True, language: str = None) -> None:
     """Updates or initializes topic routing and summary enablement settings."""
-    update_query = """
-        UPDATE chat_metadata SET 
-        summary_thread_id = %s,
-        is_enabled = %s,
-        updated_at = CURRENT_TIMESTAMP
-        WHERE chat_id = %s;
+    if language:
+        update_query = """
+            UPDATE chat_metadata SET 
+            summary_thread_id = %s,
+            is_enabled = %s,
+            language = %s,
+            updated_at = CURRENT_TIMESTAMP
+            WHERE chat_id = %s;
         """
+    else:
+        update_query = """
+            UPDATE chat_metadata SET 
+            summary_thread_id = %s,
+            is_enabled = %s,
+            updated_at = CURRENT_TIMESTAMP
+            WHERE chat_id = %s;
+        """
+    # Language fallback
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(update_query, (summary_thread_id, is_enabled, chat_id))
+        if language:
+            # If one types 'auto' into the command, it will initialise into None automatically
+            if language in ["auto", "default", "null"]:
+                language = None
+            cursor.execute(update_query, (summary_thread_id, is_enabled, language, chat_id))
+        else:
+            cursor.execute(update_query, (summary_thread_id, is_enabled, chat_id))
 
 
 def get_chat_settings(chat_id: int, thread_id: int | None = None) -> dict:
     """Retrieves chat configuration (destination topic, status, and message count)."""
     query = """
-        SELECT summary_thread_id, is_enabled, message_count 
+        SELECT summary_thread_id, is_enabled, message_count, language 
         FROM chat_metadata 
         WHERE chat_id = %s AND COALESCE(thread_id, -1) = COALESCE(%s, -1)
         LIMIT 1;
@@ -432,7 +452,7 @@ def get_chat_settings(chat_id: int, thread_id: int | None = None) -> dict:
         if row:
             return row
         # Default settings for new chats
-        return {"summary_thread_id": None, "is_enabled": True, "message_count": 0}
+        return {"summary_thread_id": None, "is_enabled": True, "message_count": 0, "language": None}
 
 
 def increment_message_count(chat_id: int, thread_id: int | None = None) -> int:

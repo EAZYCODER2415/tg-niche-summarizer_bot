@@ -39,7 +39,7 @@ free_models = [
     "google/gemma-4-31b-it:free"
 ]
 
-def summarizeLLMtool(prompt: str, file_url: str = None, link: str = None) -> str:
+def summarizeLLMtool(prompt: str, file_url: str = None, link: str = None, language: str = None) -> str:
     """
     Summarizes chat messages or processes multimodal input using Qwen on OpenRouter.
     
@@ -67,6 +67,10 @@ def summarizeLLMtool(prompt: str, file_url: str = None, link: str = None) -> str
 
     # Base text message with any hidden document filenames included as context
     combined_text = f"Message: {prompt}"
+    
+    if language not in ["auto"]:
+        combined_text += f"\nSummary Language: {', '.join(language)}"
+    
     if doc_names:
         combined_text += f"\nAttachments: {', '.join(doc_names)}"
 
@@ -179,7 +183,59 @@ def checkForTopic(message: str, topic: str, file_url: str = None) -> bool:
 
         except Exception as e:
             print(f"Unexpected error: {e}")
-            return f"⚠️ Summary unavailable: {str(e)}"
+            return f"⚠️ checkForTopic unavailable: {str(e)}"
+
+# google/gemma-4-26b-a4b-it:free
+def validate_language(input: str=None) -> str:
+    """
+    Lightweight language validator using a fast OpenRouter model.
+    """
+    model = "google/gemma-4-26b-a4b-it:free" # Or your preferred fast free model
+    
+    system_prompt = (
+        "You are an input validator for a language configuration setting.\n"
+        "Analyze the user's text and determine if it represents a real language, dialect, "
+        "or recognizable language blend (e.g., Singlish, Hinglish, Taglish).\n"
+        "Return the original user input if it is immediately recognizable as a validated language, if not and\n"
+        "the input implies an actual language, try to reword and standardize it in English\n"
+        "If all else fails, return only 'False'.\n"
+    )
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # Build content list dynamically
+            content = [
+                {"type": "text", "text": input}
+            ]
+
+            response = client.chat.completions.create(
+                model=model,
+                extra_body={"models": free_models},
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt
+                    },
+                    {"role": "user", "content": content}
+                ],
+                timeout=15.0
+            )
+
+            return response.choices[0].message.content
+
+        except APIError as e:
+            print(f"[Attempt {attempt + 1}/{max_retries}] OpenRouter Error: {e}")
+            if attempt == max_retries - 1:
+                return f"⚠️ OpenRouter Error: Request failed after {max_retries} attempts."
+            
+            time.sleep(2 ** attempt + 1)
+
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            return f"⚠️ Could not check language: {str(e)}"
+
+
 
 '''
 1. Get SQL database
